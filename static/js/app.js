@@ -10,7 +10,7 @@ const state = {
 
 const titles = {
   dashboard: ["Dashboard", "Clinic overview and safety signals"],
-  prescribe: ["Prescribe", "Specialty-filtered formulary with live conflict checks"],
+  prescribe: ["Prescribe", "Full medicine list with live conflict checks"],
   patients: ["Patients", "Unified records shared across all specialties"],
   medicines: ["Medicines", "Single master list — one source of truth"],
   interactions: ["Conflicts", "Predefined drug–drug interaction rules"],
@@ -168,12 +168,10 @@ async function onPatientChange() {
 }
 
 async function loadFormulary() {
-  const docs = state.doctors.find((d) => d.doctor_id === doctorId());
-  document.getElementById("formulary-label").textContent = docs
-    ? `Showing medicines for ${docs.speciality_name}`
-    : "Filtered to the signed-in doctor’s specialty";
+  document.getElementById("formulary-label").textContent =
+    "All medicines available to every doctor";
 
-  const meds = await api(`/api/medicines?doctor_id=${doctorId()}`);
+  const meds = await api("/api/medicines");
   const wrap = document.getElementById("formulary");
   wrap.innerHTML = meds
     .map((m) => {

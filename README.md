@@ -6,7 +6,7 @@ Specialty-based relational database architecture for safer clinic prescribing.
 
 ## Features
 
-- **Smart filtering** — doctors only see medicines mapped to their specialty
+- **Shared medicine list** — all doctors can prescribe any medicine from the master list
 - **Automated conflict detection** — checks new Rx against the patient’s active medicines
 - **One source of truth** — single `master_medicine` table; no per-department duplicates
 - **Unified patient record** — prescriptions from all specialties in one history
@@ -37,7 +37,7 @@ python3 -c "from database import init_db; init_db(force=True)"
 | `doctor` + `doctor_qualification` | Doctor belongs to one specialty; multi-valued qualifications |
 | `patient` | Shared across departments (`age` derived from `dob`) |
 | `master_medicine` | Unified medicine master |
-| `specialty_medicine` | M:N specialty formulary (smart filter) |
+| `specialty_medicine` | Optional specialty–medicine links (not used for access control) |
 | `medicine_interaction` | Predefined drug–drug conflict pairs |
 | `medicine_substitute` | Alternate / substitute relationship |
 | `prescription` / `prescription_item` | Rx header + weak-entity line items |

@@ -202,34 +202,16 @@ def get_patient(patient_id: int):
 
 @app.get("/api/medicines")
 def list_medicines():
-    """All master medicines, or specialty-filtered when ?doctor_id= is given."""
-    doctor_id = request.args.get("doctor_id", type=int)
+    """All master medicines — available to every doctor."""
     conn = get_connection()
-
-    if doctor_id:
-        rows = rows_to_dicts(
-            conn.execute(
-                """
-                SELECT m.medicine_id, m.medicine_name, m.type,
-                       m.manufacturer, m.unit_price
-                FROM master_medicine m
-                JOIN specialty_medicine sm ON sm.medicine_id = m.medicine_id
-                JOIN doctor d ON d.speciality_id = sm.speciality_id
-                WHERE d.doctor_id = ?
-                ORDER BY m.medicine_name
-                """,
-                (doctor_id,),
-            ).fetchall()
-        )
-    else:
-        rows = rows_to_dicts(
-            conn.execute(
-                """
-                SELECT medicine_id, medicine_name, type, manufacturer, unit_price
-                FROM master_medicine ORDER BY medicine_name
-                """
-            ).fetchall()
-        )
+    rows = rows_to_dicts(
+        conn.execute(
+            """
+            SELECT medicine_id, medicine_name, type, manufacturer, unit_price
+            FROM master_medicine ORDER BY medicine_name
+            """
+        ).fetchall()
+    )
     conn.close()
     return jsonify(rows)
 
@@ -383,7 +365,7 @@ def create_prescription():
 
     # Validate doctor & patient
     doctor = conn.execute(
-        "SELECT doctor_id, speciality_id FROM doctor WHERE doctor_id = ?", (doctor_id,)
+        "SELECT doctor_id FROM doctor WHERE doctor_id = ?", (doctor_id,)
     ).fetchone()
     if not doctor:
         conn.close()
@@ -393,33 +375,6 @@ def create_prescription():
     ).fetchone():
         conn.close()
         return jsonify({"error": "Patient not found"}), 404
-
-    # Specialty filter enforcement
-    for mid in medicine_ids:
-        allowed = conn.execute(
-            """
-            SELECT 1 FROM specialty_medicine
-            WHERE speciality_id = ? AND medicine_id = ?
-            """,
-            (doctor["speciality_id"], mid),
-        ).fetchone()
-        if not allowed:
-            name = conn.execute(
-                "SELECT medicine_name FROM master_medicine WHERE medicine_id = ?",
-                (mid,),
-            ).fetchone()
-            conn.close()
-            return (
-                jsonify(
-                    {
-                        "error": (
-                            f"'{name['medicine_name'] if name else mid}' is not in this "
-                            "doctor's specialty formulary"
-                        )
-                    }
-                ),
-                400,
-            )
 
     conflicts = check_conflicts(conn, patient_id, medicine_ids)
     high = [c for c in conflicts if c["severity"] == "high"]
