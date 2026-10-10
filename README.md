@@ -14,10 +14,32 @@ Specialty-based relational database architecture for safer clinic prescribing.
 - **Substitute medicines** — alternate drug links from the ER design
 - **Warning alerts** — interaction alerts stored against prescription items
 
+## Database
+
+MariaDB / MySQL (InnoDB, `utf8mb4`). Schema and seed live in `sql/`.
+
+| Env var | Default |
+|---|---|
+| `MARIADB_HOST` | `127.0.0.1` |
+| `MARIADB_PORT` | `3306` |
+| `MARIADB_USER` | `root` |
+| `MARIADB_PASSWORD` | _(empty)_ |
+| `MARIADB_DATABASE` | `clinic` |
+
+Manual import (optional):
+
+```bash
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS clinic CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -p clinic < sql/schema.sql
+mysql -u root -p clinic < sql/seed.sql
+```
+
 ## Quick start
 
 ```bash
 cd /home/ramsunder/Documents/project
+python3 -m pip install -r requirements.txt
+# ensure MariaDB is running and credentials match the env vars above
 python3 app.py
 ```
 

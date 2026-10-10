@@ -1,4 +1,5 @@
 -- Seed data: small Kerala multi-specialty clinic
+-- MariaDB / MySQL compatible (includes live clinic.db rows)
 
 INSERT INTO speciality (speciality_name) VALUES
     ('Cardiology'),
@@ -33,7 +34,7 @@ INSERT INTO patient (patient_name, dob, contact_no, gender) VALUES
     ('P. Narayanan',       '1958-09-30', '9447001005', 'M'),
     ('Saraswathy Pillai',  '1963-04-12', '9447001006', 'F');
 
-INSERT INTO master_medicine (medicine_name, type, manufacturer, unit_price) VALUES
+INSERT INTO master_medicine (medicine_name, `type`, manufacturer, unit_price) VALUES
     ('Aspirin',           'Antiplatelet',     'Bayer',           12.50),
     ('Clopidogrel',       'Antiplatelet',     'Sanofi',          45.00),
     ('Atorvastatin',      'Statin',           'Pfizer',          38.00),
@@ -106,18 +107,20 @@ INSERT INTO medicine_interaction (drug_a_id, drug_b_id, notes, description, seve
      'Spironolactone + Losartan can elevate serum potassium.', 'high');
 
 -- Sample past / active prescriptions showing cross-department history
-INSERT INTO prescription (patient_id, doctor_id, date) VALUES
+INSERT INTO prescription (patient_id, doctor_id, `date`) VALUES
     (1, 1, '2026-08-10'),  -- Krishnan seen by Cardiology
     (1, 2, '2026-09-02'),  -- same patient later by Endocrinology
     (2, 4, '2026-09-15'),  -- Lakshmi Amma / Geriatrics
-    (3, 3, '2026-09-20');  -- Thomas / General Medicine
+    (3, 3, '2026-09-20'),  -- Thomas / General Medicine
+    (4, 3, '2026-10-04');  -- Fatima Beevi / General Medicine (from live clinic.db)
 
 INSERT INTO prescription_item (prescription_no, item_no, medicine_id, dosage, frequency, duration, status) VALUES
-    (1, 1, 1, '75 mg',  'Once daily',  'Ongoing', 'active'),   -- Aspirin
-    (1, 2, 3, '10 mg',  'Once daily',  'Ongoing', 'active'),   -- Atorvastatin
-    (1, 3, 4, '25 mg',  'Twice daily', 'Ongoing', 'active'),   -- Metoprolol
-    (2, 1, 8, '500 mg', 'Twice daily', 'Ongoing', 'active'),   -- Metformin
-    (2, 2, 9, '1 mg',   'Once daily',  'Ongoing', 'active'),   -- Glimepiride
-    (3, 1, 5, '5 mg',   'Once daily',  'Ongoing', 'active'),   -- Amlodipine
-    (3, 2, 12,'500 mg', 'As needed',   '7 days',  'past'),     -- Paracetamol
-    (4, 1, 14,'20 mg',  'Once daily',  '14 days', 'active');   -- Omeprazole
+    (1, 1, 1,  '75 mg',  'Once daily',  'Ongoing', 'active'),   -- Aspirin
+    (1, 2, 3,  '10 mg',  'Once daily',  'Ongoing', 'active'),   -- Atorvastatin
+    (1, 3, 4,  '25 mg',  'Twice daily', 'Ongoing', 'active'),   -- Metoprolol
+    (2, 1, 8,  '500 mg', 'Twice daily', 'Ongoing', 'active'),   -- Metformin
+    (2, 2, 9,  '1 mg',   'Once daily',  'Ongoing', 'active'),   -- Glimepiride
+    (3, 1, 5,  '5 mg',   'Once daily',  'Ongoing', 'active'),   -- Amlodipine
+    (3, 2, 12, '500 mg', 'As needed',   '7 days',  'past'),     -- Paracetamol
+    (4, 1, 14, '20 mg',  'Once daily',  '14 days', 'active'),   -- Omeprazole
+    (5, 1, 12, '500 mg', 'SOS',         '3 days',  'active');   -- Paracetamol

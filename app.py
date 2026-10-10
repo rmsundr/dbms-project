@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from flask import Flask, jsonify, render_template, request
 
-from database import get_connection, init_db, patient_age, rows_to_dicts
+from database import get_connection, init_db, patient_age, row_to_dict, rows_to_dicts
 
 app = Flask(__name__)
 
@@ -37,7 +37,7 @@ def list_doctors():
     )
     for doc in doctors:
         quals = conn.execute(
-            "SELECT qualification FROM doctor_qualification WHERE doctor_id = ?",
+            "SELECT qualification FROM doctor_qualification WHERE doctor_id = %s",
             (doc["doctor_id"],),
         ).fetchall()
         doc["qualifications"] = [q["qualification"] for q in quals]
@@ -89,7 +89,7 @@ def create_patient():
     cur = conn.execute(
         """
         INSERT INTO patient (patient_name, dob, contact_no, gender)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
         """,
         (
             data["patient_name"].strip(),
@@ -100,9 +100,9 @@ def create_patient():
     )
     conn.commit()
     pid = cur.lastrowid
-    row = dict(
+    row = row_to_dict(
         conn.execute(
-            "SELECT patient_id, patient_name, dob, contact_no, gender FROM patient WHERE patient_id = ?",
+            "SELECT patient_id, patient_name, dob, contact_no, gender FROM patient WHERE patient_id = %s",
             (pid,),
         ).fetchone()
     )
@@ -115,14 +115,14 @@ def create_patient():
 def get_patient(patient_id: int):
     conn = get_connection()
     row = conn.execute(
-        "SELECT patient_id, patient_name, dob, contact_no, gender FROM patient WHERE patient_id = ?",
+        "SELECT patient_id, patient_name, dob, contact_no, gender FROM patient WHERE patient_id = %s",
         (patient_id,),
     ).fetchone()
     if not row:
         conn.close()
         return jsonify({"error": "Patient not found"}), 404
 
-    patient = dict(row)
+    patient = row_to_dict(row)
     patient["age"] = patient_age(patient["dob"])
 
     history = rows_to_dicts(
@@ -134,7 +134,7 @@ def get_patient(patient_id: int):
             FROM prescription p
             JOIN doctor d ON d.doctor_id = p.doctor_id
             JOIN speciality s ON s.speciality_id = d.speciality_id
-            WHERE p.patient_id = ?
+            WHERE p.patient_id = %s
             ORDER BY p.date DESC, p.prescription_no DESC
             """,
             (patient_id,),
@@ -149,7 +149,7 @@ def get_patient(patient_id: int):
                        m.medicine_id, m.medicine_name, m.type
                 FROM prescription_item pi
                 JOIN master_medicine m ON m.medicine_id = pi.medicine_id
-                WHERE pi.prescription_no = ?
+                WHERE pi.prescription_no = %s
                 ORDER BY pi.item_no
                 """,
                 (rx["prescription_no"],),
@@ -162,7 +162,7 @@ def get_patient(patient_id: int):
                     SELECT wa.alert_id, wa.alert_type, wa.message
                     FROM item_alert ia
                     JOIN warning_alert wa ON wa.alert_id = ia.alert_id
-                    WHERE ia.prescription_no = ? AND ia.item_no = ?
+                    WHERE ia.prescription_no = %s AND ia.item_no = %s
                     """,
                     (rx["prescription_no"], item["item_no"]),
                 ).fetchall()
@@ -181,7 +181,7 @@ def get_patient(patient_id: int):
             JOIN master_medicine m ON m.medicine_id = pi.medicine_id
             JOIN doctor d ON d.doctor_id = p.doctor_id
             JOIN speciality s ON s.speciality_id = d.speciality_id
-            WHERE p.patient_id = ? AND pi.status = 'active'
+            WHERE p.patient_id = %s AND pi.status = 'active'
             ORDER BY m.medicine_name
             """,
             (patient_id,),
@@ -225,7 +225,7 @@ def medicine_substitutes(medicine_id: int):
             SELECT m.medicine_id, m.medicine_name, m.type, m.unit_price
             FROM medicine_substitute ms
             JOIN master_medicine m ON m.medicine_id = ms.substitute_id
-            WHERE ms.original_id = ?
+            WHERE ms.original_id = %s
             """,
             (medicine_id,),
         ).fetchall()
@@ -268,7 +268,7 @@ def check_conflicts(conn, patient_id: int, new_medicine_ids: list[int]) -> list[
         FROM prescription_item pi
         JOIN prescription p ON p.prescription_no = pi.prescription_no
         JOIN master_medicine m ON m.medicine_id = pi.medicine_id
-        WHERE p.patient_id = ? AND pi.status = 'active'
+        WHERE p.patient_id = %s AND pi.status = 'active'
         """,
         (patient_id,),
     ).fetchall()
@@ -277,7 +277,7 @@ def check_conflicts(conn, patient_id: int, new_medicine_ids: list[int]) -> list[
     new_rows = conn.execute(
         f"""
         SELECT medicine_id, medicine_name FROM master_medicine
-        WHERE medicine_id IN ({",".join("?" * len(new_medicine_ids)) or "NULL"})
+        WHERE medicine_id IN ({",".join(["%s"] * len(new_medicine_ids)) or "NULL"})
         """,
         new_medicine_ids,
     ).fetchall() if new_medicine_ids else []
@@ -302,7 +302,7 @@ def check_conflicts(conn, patient_id: int, new_medicine_ids: list[int]) -> list[
                 """
                 SELECT notes, description, severity
                 FROM medicine_interaction
-                WHERE drug_a_id = ? AND drug_b_id = ?
+                WHERE drug_a_id = %s AND drug_b_id = %s
                 """,
                 key,
             ).fetchone()
@@ -334,7 +334,7 @@ def api_check_conflicts():
 
     conn = get_connection()
     patient = conn.execute(
-        "SELECT patient_id FROM patient WHERE patient_id = ?", (patient_id,)
+        "SELECT patient_id FROM patient WHERE patient_id = %s", (patient_id,)
     ).fetchone()
     if not patient:
         conn.close()
@@ -365,13 +365,13 @@ def create_prescription():
 
     # Validate doctor & patient
     doctor = conn.execute(
-        "SELECT doctor_id FROM doctor WHERE doctor_id = ?", (doctor_id,)
+        "SELECT doctor_id FROM doctor WHERE doctor_id = %s", (doctor_id,)
     ).fetchone()
     if not doctor:
         conn.close()
         return jsonify({"error": "Doctor not found"}), 404
     if not conn.execute(
-        "SELECT 1 FROM patient WHERE patient_id = ?", (patient_id,)
+        "SELECT 1 FROM patient WHERE patient_id = %s", (patient_id,)
     ).fetchone():
         conn.close()
         return jsonify({"error": "Patient not found"}), 404
@@ -392,7 +392,7 @@ def create_prescription():
         )
 
     cur = conn.execute(
-        "INSERT INTO prescription (patient_id, doctor_id) VALUES (?, ?)",
+        "INSERT INTO prescription (patient_id, doctor_id) VALUES (%s, %s)",
         (patient_id, doctor_id),
     )
     rx_no = cur.lastrowid
@@ -404,7 +404,7 @@ def create_prescription():
             """
             INSERT INTO prescription_item
                 (prescription_no, item_no, medicine_id, dosage, frequency, duration, status)
-            VALUES (?, ?, ?, ?, ?, ?, 'active')
+            VALUES (%s, %s, %s, %s, %s, %s, 'active')
             """,
             (
                 rx_no,
@@ -426,14 +426,14 @@ def create_prescription():
             alert_type = f"drug_interaction_{c['severity']}"
             message = f"{c['drug_a']} ↔ {c['drug_b']}: {c['description']}"
             acur = conn.execute(
-                "INSERT INTO warning_alert (alert_type, message) VALUES (?, ?)",
+                "INSERT INTO warning_alert (alert_type, message) VALUES (%s, %s)",
                 (alert_type, message),
             )
             alert_id = acur.lastrowid
             conn.execute(
                 """
                 INSERT INTO item_alert (prescription_no, item_no, alert_id)
-                VALUES (?, ?, ?)
+                VALUES (%s, %s, %s)
                 """,
                 (rx_no, idx, alert_id),
             )
@@ -466,8 +466,8 @@ def update_item_status(rx_no: int, item_no: int):
     conn = get_connection()
     cur = conn.execute(
         """
-        UPDATE prescription_item SET status = ?
-        WHERE prescription_no = ? AND item_no = ?
+        UPDATE prescription_item SET status = %s
+        WHERE prescription_no = %s AND item_no = %s
         """,
         (status, rx_no, item_no),
     )
