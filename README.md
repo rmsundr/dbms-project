@@ -1,73 +1,71 @@
-# ClinicRx — E-Prescription Workflow System
+# ClinicRx — E-Prescription Workflow System (Pure JavaScript)
 
-Specialty-based relational database architecture for safer clinic prescribing.
+Specialty-based relational clinic prescribing application running **100% in JavaScript** without external database or backend API dependencies.
 
 **Team:** Ramsunder Harikumar · Adith N · Hiba Fathima K · Haripriya N S
 
+---
+
 ## Features
 
-- **Shared medicine list** — all doctors can prescribe any medicine from the master list
-- **Automated conflict detection** — checks new Rx against the patient’s active medicines
-- **One source of truth** — single `master_medicine` table; no per-department duplicates
-- **Unified patient record** — prescriptions from all specialties in one history
-- **Active / past status** — conflict checks use only currently active medications
-- **Substitute medicines** — alternate drug links from the ER design
-- **Warning alerts** — interaction alerts stored against prescription items
+- **Shared medicine list** — all doctors can prescribe any medicine from the master formulary
+- **Automated conflict detection** — checks new prescriptions against the patient’s active medicines and flags high/moderate drug–drug interactions
+- **One source of truth** — single unified master medicine collection; no duplicates
+- **Unified patient record** — full prescription history and active treatments across all specialties
+- **Active / past status** — toggle treatments between active and past; conflict checking only tests against active treatments
+- **Substitute medicines** — suggests alternate medications based on predefined substitution rules
+- **Zero backend dependencies** — no Python, Flask, MariaDB, or API server needed; runs directly in the browser with `localStorage` persistence
 
-## Database
+---
 
-MariaDB / MySQL (InnoDB, `utf8mb4`). Schema and seed live in `sql/`.
+## Quick Start
 
-| Env var | Default |
-|---|---|
-| `MARIADB_HOST` | `127.0.0.1` |
-| `MARIADB_PORT` | `3306` |
-| `MARIADB_USER` | `root` |
-| `MARIADB_PASSWORD` | _(empty)_ |
-| `MARIADB_DATABASE` | `clinic` |
-
-Manual import (optional):
+### Option 1: Open Directly in Your Web Browser
+Simply open [`index.html`](index.html) in any browser (Chrome, Firefox, Safari, Edge).
 
 ```bash
-mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS clinic CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-mysql -u root -p clinic < sql/schema.sql
-mysql -u root -p clinic < sql/seed.sql
+xdg-open index.html
+# or double-click index.html in your file manager
 ```
 
-## Quick start
-
+### Option 2: Run with Any Static Server (Optional)
+If you prefer running via `localhost`:
 ```bash
-cd /home/ramsunder/Documents/project
-python3 -m pip install -r requirements.txt
-# ensure MariaDB is running and credentials match the env vars above
-python3 app.py
+# Using Node / npx
+npx serve .
+
+# Or using Python's built-in static server (no dependencies)
+python3 -m http.server 5000
+```
+Then visit `http://127.0.0.1:5000`.
+
+---
+
+## Architecture & Code Organization
+
+```
+project/
+├── index.html           # Main application entry point (relative assets)
+├── static/
+│   ├── css/
+│   │   └── style.css    # Responsive clinic UI theme
+│   └── js/
+│       └── app.js       # Complete JavaScript application & data layer:
+│                        #   - Seed dataset (doctors, patients, meds, rules)
+│                        #   - ClinicService (in-memory & localStorage store)
+│                        #   - Drug conflict & prescription safety engine
+│                        #   - UI controllers and view routing
+├── templates/
+│   └── index.html       # Standalone template copy
+└── sql/                 # Reference SQL schema and seed files
 ```
 
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000)
+---
 
-To rebuild the database from scratch:
+## Try the Conflict Flow
 
-```bash
-python3 -c "from database import init_db; init_db(force=True)"
-```
-
-## Schema (from the ER diagram)
-
-| Table | Role |
-|---|---|
-| `speciality` | Cardiology, Endocrinology, … |
-| `doctor` + `doctor_qualification` | Doctor belongs to one specialty; multi-valued qualifications |
-| `patient` | Shared across departments (`age` derived from `dob`) |
-| `master_medicine` | Unified medicine master |
-| `specialty_medicine` | Optional specialty–medicine links (not used for access control) |
-| `medicine_interaction` | Predefined drug–drug conflict pairs |
-| `medicine_substitute` | Alternate / substitute relationship |
-| `prescription` / `prescription_item` | Rx header + weak-entity line items |
-| `warning_alert` / `item_alert` | Alerts triggered by prescription items |
-
-## Try the conflict flow
-
-1. Sign in as **Dr. Sreelatha Nair** (General Medicine)
-2. Select patient **K. Krishnan** (already on Aspirin from Cardiology)
-3. Add **Ibuprofen** from the formulary and click **Check conflicts**
-4. The system flags Aspirin ↔ Ibuprofen (high severity) and blocks save unless overridden
+1. Choose **Dr. Sreelatha Nair** (General Medicine) from the "Signed in as" dropdown.
+2. Under **Prescribe**, select patient **K. Krishnan** (who is already on Aspirin from Cardiology).
+3. Click **Ibuprofen** from the medicine formulary and click **Check conflicts**.
+4. The system flags **Aspirin ↔ Ibuprofen (high severity)** and blocks saving until you click **Override & save anyway**.
+5. Go to the **Patients** tab and select **K. Krishnan** to view his updated cross-specialty history.

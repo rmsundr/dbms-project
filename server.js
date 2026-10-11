@@ -1,0 +1,464 @@
+ const express = require('express');                                                                                                 
+    const cors = require('cors');                                                                                                       
+    const mysql = require('mysql2/promise');                                                                                            
+    const path = require('path');                                                                                                       
+    require('dotenv').config();                                                                                                         
+                                                                                                                                        
+    const app = express();                                                                                                              
+    const PORT = process.env.PORT || 5000;                                                                                              
+                                                                                                                                        
+    // ── Middleware ───────────────────────────────────────────────────────────────                                                    
+    app.use(cors());                                                                                                                    
+    app.use(express.json());                                                                                                            
+                                                                                                                                        
+    // Serve static frontend files (index.html, static/css, static/js)                                                                  
+    app.use(express.static(path.join(__dirname)));                                                                                      
+                                                                                                                                        
+    // ── Database Connection Pool ─────────────────────────────────────────────────                                                    
+const pool = mysql.createPool({
+  host: process.env.DB_HOST || process.env.MARIADB_HOST || '127.0.0.1',
+  port: Number(process.env.DB_PORT || process.env.MARIADB_PORT) || 3306,
+  user: process.env.DB_USER || process.env.MARIADB_USER || 'clinic_user',
+  password: process.env.DB_PASSWORD || process.env.MARIADB_PASSWORD || 'clinic123',
+  database: process.env.DB_NAME || process.env.MARIADB_DATABASE || 'clinic',                                                                                        
+      waitForConnections: true,                                                                                                         
+      connectionLimit: 10,                                                                                                              
+      queueLimit: 0,                                                                                                                    
+    });                                                                                                                                 
+                                                                                                                                        
+    // Helper: Age calculation from Date of Birth                                                                                       
+    function calculateAge(dob) {                                                                                                        
+      if (!dob) return 0;                                                                                                               
+      const birth = new Date(dob);                                                                                                      
+      const today = new Date();                                                                                                         
+      let age = today.getFullYear() - birth.getFullYear();                                                                              
+      const m = today.getMonth() - birth.getMonth();                                                                                    
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {                                                                    
+        age--;                                                                                                                          
+      }                                                                                                                                 
+      return age >= 0 ? age : 0;                                                                                                        
+    }                                                                                                                                   
+                                                                                                                                        
+    // ── 1. Doctors & Specialties ─────────────────────────────────────────────────                                                    
+                                                                                                                                        
+    // GET /api/doctors — List all doctors with their qualifications                                                                    
+    app.get('/api/doctors', async (req, res) => {                                                                                       
+      try {                                                                                                                             
+        const [doctors] = await pool.query(`                                                                                            
+          SELECT d.doctor_id, d.doctor_name, d.contact_no, s.speciality_id, s.speciality_name                                           
+          FROM doctor d                                                                                                                 
+          JOIN speciality s ON s.speciality_id = d.speciality_id                                                                        
+          ORDER BY d.doctor_name                                                                                                        
+        `);                                                                                                                             
+                                                                                                                                        
+        for (const doc of doctors) {                                                                                                    
+          const [quals] = await pool.query(                                                                                             
+            'SELECT qualification FROM doctor_qualification WHERE doctor_id = ?',                                                       
+            [doc.doctor_id]                                                                                                             
+          );                                                                                                                            
+          doc.qualifications = quals.map((q) => q.qualification);                                                                       
+        }                                                                                                                               
+                                                                                                                                        
+        res.json(doctors);                                                                                                              
+      } catch (err) {                                                                                                                   
+        console.error('Error fetching doctors:', err);                                                                                  
+        res.status(500).json({ error: 'Database error fetching doctors' });                                                             
+      }                                                                                                                                 
+    });                                                                                                                                 
+                                                                                                                                        
+    // GET /api/specialties — List all clinic specialties                                                                               
+    app.get('/api/specialties', async (req, res) => {                                                                                   
+      try {                                                                                                                             
+        const [rows] = await pool.query(                                                                                                
+          'SELECT speciality_id, speciality_name FROM speciality ORDER BY speciality_name'                                              
+        );                                                                                                                              
+        res.json(rows);                                                                                                                 
+      } catch (err) {                                                                                                                   
+        console.error('Error fetching specialties:', err);                                                                              
+        res.status(500).json({ error: 'Database error fetching specialties' });                                                         
+      }                                                                                                                                 
+    });                                                                                                                                 
+                                                                                                                                        
+    // ── 2. Patients ──────────────────────────────────────────────────────────────                                                    
+                                                                                                                                        
+    // GET /api/patients — List all patients with calculated ages                                                                       
+    app.get('/api/patients', async (req, res) => {                                                                                      
+      try {                                                                                                                             
+        const [patients] = await pool.query(`                                                                                           
+          SELECT patient_id, patient_name, DATE_FORMAT(dob, '%Y-%m-%d') AS dob, contact_no, gender                                      
+          FROM patient                                                                                                                  
+          ORDER BY patient_name                                                                                                         
+        `);                                                                                                                             
+                                                                                                                                        
+        patients.forEach((p) => {                                                                                                       
+          p.age = calculateAge(p.dob);                                                                                                  
+        });                                                                                                                             
+                                                                                                                                        
+        res.json(patients);                                                                                                             
+      } catch (err) {                                                                                                                   
+        console.error('Error fetching patients:', err);                                                                                 
+        res.status(500).json({ error: 'Database error fetching patients' });                                                            
+      }                                                                                                                                 
+    });                                                                                                                                 
+                                                                                                                                        
+    // POST /api/patients — Register a new patient                                                                                      
+    app.post('/api/patients', async (req, res) => {                                                                                     
+      const { patient_name, dob, contact_no, gender } = req.body;                                                                       
+                                                                                                                                        
+      if (!patient_name || !dob || !gender) {                                                                                           
+        return res.status(400).json({ error: 'patient_name, dob, and gender are required' });                                           
+      }                                                                                                                                 
+                                                                                                                                        
+      try {                                                                                                                             
+        const [result] = await pool.query(                                                                                              
+          'INSERT INTO patient (patient_name, dob, contact_no, gender) VALUES (?, ?, ?, ?)',                                            
+          [patient_name.trim(), dob, contact_no || null, gender]                                                                        
+        );                                                                                                                              
+                                                                                                                                        
+        const newId = result.insertId;                                                                                                  
+        res.status(201).json({                                                                                                          
+          patient_id: newId,                                                                                                            
+          patient_name: patient_name.trim(),                                                                                            
+          dob,                                                                                                                          
+          contact_no: contact_no || null,                                                                                               
+          gender,                                                                                                                       
+          age: calculateAge(dob),                                                                                                       
+        });                                                                                                                             
+      } catch (err) {                                                                                                                   
+        console.error('Error registering patient:', err);                                                                               
+        res.status(500).json({ error: 'Database error creating patient' });                                                             
+      }                                                                                                                                 
+    });                                                                                                                                 
+                                                                                                                                        
+    // GET /api/patients/:id — Detailed patient history & active medications                                                            
+    app.get('/api/patients/:id', async (req, res) => {                                                                                  
+      const patientId = Number(req.params.id);                                                                                          
+                                                                                                                                        
+      try {                                                                                                                             
+        const [patientRows] = await pool.query(                                                                                         
+          "SELECT patient_id, patient_name, DATE_FORMAT(dob, '%Y-%m-%d') AS dob, contact_no, gender FROM patient WHERE patient_id = ?", 
+          [patientId]                                                                                                                   
+        );                                                                                                                              
+        if (!patientRows.length) return res.status(404).json({ error: 'Patient not found' });                                           
+                                                                                                                                        
+        const patient = patientRows[0];                                                                                                 
+        patient.age = calculateAge(patient.dob);                                                                                        
+                                                                                                                                        
+        // Prescription history                                                                                                         
+        const [rxRows] = await pool.query(                                                                                              
+          `SELECT p.prescription_no, DATE_FORMAT(p.date, '%Y-%m-%d') AS date,                                                           
+                  d.doctor_id, d.doctor_name, s.speciality_name                                                                         
+           FROM prescription p                                                                                                          
+           JOIN doctor d ON d.doctor_id = p.doctor_id                                                                                   
+           JOIN speciality s ON s.speciality_id = d.speciality_id                                                                       
+           WHERE p.patient_id = ?                                                                                                       
+           ORDER BY p.date DESC, p.prescription_no DESC`,                                                                               
+          [patientId]                                                                                                                   
+        );                                                                                                                              
+                                                                                                                                        
+        for (const rx of rxRows) {                                                                                                      
+          const [items] = await pool.query(                                                                                             
+            `SELECT pi.item_no, pi.dosage, pi.frequency, pi.duration, pi.status,                                                        
+                    m.medicine_id, m.medicine_name, m.type                                                                              
+             FROM prescription_item pi                                                                                                  
+             JOIN master_medicine m ON m.medicine_id = pi.medicine_id                                                                   
+             WHERE pi.prescription_no = ?                                                                                               
+             ORDER BY pi.item_no`,                                                                                                      
+            [rx.prescription_no]                                                                                                        
+          );                                                                                                                            
+                                                                                                                                        
+          for (const item of items) {                                                                                                   
+            const [alerts] = await pool.query(                                                                                          
+              `SELECT wa.alert_id, wa.alert_type, wa.message                                                                            
+               FROM item_alert ia                                                                                                       
+               JOIN warning_alert wa ON wa.alert_id = ia.alert_id                                                                       
+               WHERE ia.prescription_no = ? AND ia.item_no = ?`,                                                                        
+              [rx.prescription_no, item.item_no]                                                                                        
+            );                                                                                                                          
+            item.alerts = alerts;                                                                                                       
+          }                                                                                                                             
+          rx.items = items;                                                                                                             
+        }                                                                                                                               
+                                                                                                                                        
+        // Distinct currently active medications                                                                                        
+        const [activeMeds] = await pool.query(                                                                                          
+          `SELECT DISTINCT m.medicine_id, m.medicine_name, m.type,                                                                      
+                  pi.dosage, pi.frequency, pi.duration,                                                                                 
+                  DATE_FORMAT(p.date, '%Y-%m-%d') AS prescribed_on,                                                                     
+                  d.doctor_name, s.speciality_name                                                                                      
+           FROM prescription_item pi                                                                                                    
+           JOIN prescription p ON p.prescription_no = pi.prescription_no                                                                
+           JOIN master_medicine m ON m.medicine_id = pi.medicine_id                                                                     
+           JOIN doctor d ON d.doctor_id = p.doctor_id                                                                                   
+           JOIN speciality s ON s.speciality_id = d.speciality_id                                                                       
+           WHERE p.patient_id = ? AND pi.status = 'active'                                                                              
+           ORDER BY m.medicine_name`,                                                                                                   
+          [patientId]                                                                                                                   
+        );                                                                                                                              
+                                                                                                                                        
+        res.json({                                                                                                                      
+          patient,                                                                                                                      
+          active_medications: activeMeds,                                                                                               
+          prescriptions: rxRows,                                                                                                        
+        });                                                                                                                             
+      } catch (err) {                                                                                                                   
+        console.error('Error fetching patient record:', err);                                                                           
+        res.status(500).json({ error: 'Database error fetching patient' });                                                             
+      }                                                                                                                                 
+    });                                                                                                                                 
+                                                                                                                                        
+    // ── 3. Medicines & Interactions ──────────────────────────────────────────────                                                    
+                                                                                                                                        
+    // GET /api/medicines — Master medicine formulary                                                                                   
+    app.get('/api/medicines', async (req, res) => {                                                                                     
+      try {                                                                                                                             
+        const [meds] = await pool.query(                                                                                                
+          'SELECT medicine_id, medicine_name, type, manufacturer, unit_price FROM master_medicine ORDER BY medicine_name'               
+        );                                                                                                                              
+        res.json(meds);                                                                                                                 
+      } catch (err) {                                                                                                                   
+        console.error('Error fetching medicines:', err);                                                                                
+        res.status(500).json({ error: 'Database error fetching medicines' });                                                           
+      }                                                                                                                                 
+    });                                                                                                                                 
+                                                                                                                                        
+    // GET /api/medicines/:id/substitutes — Available substitutes for a drug                                                            
+    app.get('/api/medicines/:id/substitutes', async (req, res) => {                                                                     
+      try {                                                                                                                             
+        const [subs] = await pool.query(                                                                                                
+          `SELECT m.medicine_id, m.medicine_name, m.type, m.unit_price                                                                  
+           FROM medicine_substitute ms                                                                                                  
+           JOIN master_medicine m ON m.medicine_id = ms.substitute_id                                                                   
+           WHERE ms.original_id = ?`,                                                                                                   
+          [req.params.id]                                                                                                               
+        );                                                                                                                              
+        res.json(subs);                                                                                                                 
+      } catch (err) {                                                                                                                   
+        console.error('Error fetching substitutes:', err);                                                                              
+        res.status(500).json({ error: 'Database error fetching substitutes' });                                                         
+      }                                                                                                                                 
+    });                                                                                                                                 
+                                                                                                                                        
+    // GET /api/interactions — Master list of drug–drug interaction rules                                                               
+    app.get('/api/interactions', async (req, res) => {                                                                                  
+      try {                                                                                                                             
+        const [rows] = await pool.query(`                                                                                               
+          SELECT mi.drug_a_id, a.medicine_name AS drug_a,                                                                               
+                 mi.drug_b_id, b.medicine_name AS drug_b,                                                                               
+                 mi.notes, mi.description, mi.severity                                                                                  
+          FROM medicine_interaction mi                                                                                                  
+          JOIN master_medicine a ON a.medicine_id = mi.drug_a_id                                                                        
+          JOIN master_medicine b ON b.medicine_id = mi.drug_b_id                                                                        
+          ORDER BY mi.severity DESC, a.medicine_name                                                                                    
+        `);                                                                                                                             
+        res.json(rows);                                                                                                                 
+      } catch (err) {                                                                                                                   
+        console.error('Error fetching interactions:', err);                                                                             
+        res.status(500).json({ error: 'Database error fetching interactions' });                                                        
+      }                                                                                                                                 
+    });                                                                                                                                 
+                                                                                                                                        
+    // ── 4. Conflict Engine Helper ────────────────────────────────────────────────                                                    
+    async function checkConflicts(conn, patientId, newMedicineIds) {                                                                    
+      // 1. Get active medicines of patient                                                                                             
+      const [activeRows] = await conn.query(                                                                                            
+        `SELECT DISTINCT pi.medicine_id, m.medicine_name                                                                                
+         FROM prescription_item pi                                                                                                      
+         JOIN prescription p ON p.prescription_no = pi.prescription_no                                                                  
+         JOIN master_medicine m ON m.medicine_id = pi.medicine_id                                                                       
+         WHERE p.patient_id = ? AND pi.status = 'active'`,                                                                              
+        [patientId]                                                                                                                     
+      );                                                                                                                                
+      const activeMap = new Map(activeRows.map((r) => [r.medicine_id, r.medicine_name]));                                               
+                                                                                                                                        
+      // 2. Map new medicines                                                                                                           
+      const newMap = new Map();                                                                                                         
+      if (newMedicineIds.length > 0) {                                                                                                  
+        const [newRows] = await conn.query(                                                                                             
+          'SELECT medicine_id, medicine_name FROM master_medicine WHERE medicine_id IN (?)',                                            
+          [newMedicineIds]                                                                                                              
+        );                                                                                                                              
+        newRows.forEach((r) => newMap.set(r.medicine_id, r.medicine_name));                                                             
+      }                                                                                                                                 
+                                                                                                                                        
+      const allCandidateIds = Array.from(                                                                                               
+        new Set([...activeMap.keys(), ...newMedicineIds])                                                                               
+      ).sort((a, b) => a - b);                                                                                                          
+                                                                                                                                        
+      const conflicts = [];                                                                                                             
+      const seen = new Set();                                                                                                           
+                                                                                                                                        
+      for (let i = 0; i < allCandidateIds.length; i++) {                                                                                
+        for (let j = i + 1; j < allCandidateIds.length; j++) {                                                                          
+          const a = allCandidateIds[i];                                                                                                 
+          const b = allCandidateIds[j];                                                                                                 
+                                                                                                                                        
+          // Must involve at least one newly proposed drug                                                                              
+          if (!newMedicineIds.includes(a) && !newMedicineIds.includes(b)) continue;                                                     
+                                                                                                                                        
+          const pairKey = `${a}_${b}`;                                                                                                  
+          if (seen.has(pairKey)) continue;                                                                                              
+          seen.add(pairKey);                                                                                                            
+                                                                                                                                        
+          const [ixRows] = await conn.query(                                                                                            
+            'SELECT notes, description, severity FROM medicine_interaction WHERE drug_a_id = ? AND drug_b_id = ?',                      
+            [a, b]                                                                                                                      
+          );                                                                                                                            
+                                                                                                                                        
+          if (ixRows.length > 0) {                                                                                                      
+            const row = ixRows[0];                                                                                                      
+            conflicts.push({                                                                                                            
+              drug_a_id: a,                                                                                                             
+              drug_b_id: b,                                                                                                             
+              drug_a: activeMap.get(a) || newMap.get(a),                                                                                
+              drug_b: activeMap.get(b) || newMap.get(b),                                                                                
+              notes: row.notes,                                                                                                         
+              description: row.description,                                                                                             
+              severity: row.severity,                                                                                                   
+              against_active: activeMap.has(a) || activeMap.has(b),                                                                     
+            });                                                                                                                         
+          }                                                                                                                             
+        }                                                                                                                               
+      }                                                                                                                                 
+                                                                                                                                        
+      return conflicts;                                                                                                                 
+    }                                                                                                                                   
+                                                                                                                                        
+    // POST /api/conflicts/check — Check candidate prescription against active medicines                                                
+    app.post('/api/conflicts/check', async (req, res) => {                                                                              
+      const { patient_id, medicine_ids } = req.body;                                                                                    
+      if (!patient_id) return res.status(400).json({ error: 'patient_id is required' });                                                
+                                                                                                                                        
+      try {                                                                                                                             
+        const conflicts = await checkConflicts(pool, Number(patient_id), medicine_ids || []);                                           
+        res.json({ safe: conflicts.length === 0, conflicts });                                                                          
+      } catch (err) {                                                                                                                   
+        console.error('Error checking conflicts:', err);                                                                                
+        res.status(500).json({ error: 'Error checking conflicts' });                                                                    
+      }                                                                                                                                 
+    });                                                                                                                                 
+                                                                                                                                        
+    // ── 5. Prescriptions (Transactional) ─────────────────────────────────────────                                                    
+                                                                                                                                        
+    // POST /api/prescriptions — Save a new prescription                                                                                
+    app.post('/api/prescriptions', async (req, res) => {                                                                                
+      const { patient_id, doctor_id, items, force } = req.body;                                                                         
+      if (!patient_id || !doctor_id || !items || !items.length) {                                                                       
+        return res.status(400).json({ error: 'patient_id, doctor_id, and items are required' });                                        
+      }                                                                                                                                 
+                                                                                                                                        
+      const conn = await pool.getConnection();                                                                                          
+      try {                                                                                                                             
+        await conn.beginTransaction();                                                                                                  
+                                                                                                                                        
+        const medIds = items.map((it) => Number(it.medicine_id));                                                                       
+        const conflicts = await checkConflicts(conn, Number(patient_id), medIds);                                                       
+        const hasHighConflict = conflicts.some((c) => c.severity === 'high');                                                           
+                                                                                                                                        
+        // Block unless override requested                                                                                              
+        if (hasHighConflict && !force) {                                                                                                
+          await conn.rollback();                                                                                                        
+          return res.status(409).json({                                                                                                 
+            error: 'Dangerous drug interactions detected',                                                                              
+            blocked: true,                                                                                                              
+            conflicts,                                                                                                                  
+          });                                                                                                                           
+        }                                                                                                                               
+                                                                                                                                        
+        // 1. Insert Prescription Header                                                                                                
+        const [rxRes] = await conn.query(                                                                                               
+          'INSERT INTO prescription (patient_id, doctor_id, `date`) VALUES (?, ?, CURRENT_DATE)',                                       
+          [patient_id, doctor_id]                                                                                                       
+        );                                                                                                                              
+        const rxNo = rxRes.insertId;                                                                                                    
+                                                                                                                                        
+        // 2. Insert Prescription Line Items & Alerts                                                                                   
+        for (let idx = 0; idx < items.length; idx++) {                                                                                  
+          const it = items[idx];                                                                                                        
+          const itemNo = idx + 1;                                                                                                       
+          const mid = Number(it.medicine_id);                                                                                           
+                                                                                                                                        
+          await conn.query(                                                                                                             
+            `INSERT INTO prescription_item (prescription_no, item_no, medicine_id, dosage, frequency, duration, status)                 
+             VALUES (?, ?, ?, ?, ?, ?, 'active')`,                                                                                      
+            [rxNo, itemNo, mid, it.dosage || '', it.frequency || '', it.duration || '']                                                 
+          );                                                                                                                            
+                                                                                                                                        
+          // Attach any alerts triggered by this drug                                                                                   
+          const related = conflicts.filter((c) => c.drug_a_id === mid || c.drug_b_id === mid);                                          
+          for (const c of related) {                                                                                                    
+            const [alertRes] = await conn.query(                                                                                        
+              'INSERT INTO warning_alert (alert_type, message) VALUES (?, ?)',                                                          
+              [`drug_interaction_${c.severity}`, `${c.drug_a} ↔ ${c.drug_b}: ${c.description}`]                                         
+            );                                                                                                                          
+            await conn.query(                                                                                                           
+              'INSERT INTO item_alert (prescription_no, item_no, alert_id) VALUES (?, ?, ?)',                                           
+              [rxNo, itemNo, alertRes.insertId]                                                                                         
+            );                                                                                                                          
+          }                                                                                                                             
+        }                                                                                                                               
+                                                                                                                                        
+        await conn.commit();                                                                                                            
+        res.status(201).json({                                                                                                          
+          prescription_no: rxNo,                                                                                                        
+          conflicts,                                                                                                                    
+          forced: Boolean(force && conflicts.length),                                                                                   
+        });                                                                                                                             
+      } catch (err) {                                                                                                                   
+        await conn.rollback();                                                                                                          
+        console.error('Error saving prescription:', err);                                                                               
+        res.status(500).json({ error: 'Database transaction failed' });                                                                 
+      } finally {                                                                                                                       
+        conn.release();                                                                                                                 
+      }                                                                                                                                 
+    });                                                                                                                                 
+                                                                                                                                        
+    // PATCH /api/prescriptions/:rx/items/:item/status — Toggle active vs past status                                                   
+    app.patch('/api/prescriptions/:rx/items/:item/status', async (req, res) => {                                                        
+      const { status } = req.body;                                                                                                      
+      if (!['active', 'past'].includes(status)) {                                                                                       
+        return res.status(400).json({ error: "status must be 'active' or 'past'" });                                                    
+      }                                                                                                                                 
+                                                                                                                                        
+      try {                                                                                                                             
+        const [result] = await pool.query(                                                                                              
+          'UPDATE prescription_item SET status = ? WHERE prescription_no = ? AND item_no = ?',                                          
+          [status, req.params.rx, req.params.item]                                                                                      
+        );                                                                                                                              
+                                                                                                                                        
+        if (result.affectedRows === 0) {                                                                                                
+          return res.status(404).json({ error: 'Prescription item not found' });                                                        
+        }                                                                                                                               
+                                                                                                                                        
+        res.json({ ok: true, status });                                                                                                 
+      } catch (err) {                                                                                                                   
+        console.error('Error updating item status:', err);                                                                              
+        res.status(500).json({ error: 'Database error updating status' });                                                              
+      }
+    });
+  
+    // ── 6. Dashboard Statistics ──────────────────────────────────────────────────
+  
+    // GET /api/stats — Real-time counts for the dashboard
+    app.get('/api/stats', async (req, res) => {
+      try {
+        const [[{ patients }]] = await pool.query('SELECT COUNT(*) AS patients FROM patient');
+        const [[{ doctors }]] = await pool.query('SELECT COUNT(*) AS doctors FROM doctor');
+        const [[{ medicines }]] = await pool.query('SELECT COUNT(*) AS medicines FROM master_medicine');
+        const [[{ prescriptions }]] = await pool.query('SELECT COUNT(*) AS prescriptions FROM prescription');
+        const [[{ interactions }]] = await pool.query('SELECT COUNT(*) AS interactions FROM medicine_interaction');
+        const [[{ active_meds }]] = await pool.query(
+          "SELECT COUNT(*) AS active_meds FROM prescription_item WHERE status = 'active'"
+        );
+  
+        res.json({ patients, doctors, medicines, prescriptions, interactions, active_meds });
+      } catch (err) {
+        console.error('Error fetching stats:', err);
+        res.status(500).json({ error: 'Database error fetching stats' });
+      }
+    });
+  
+    // ── Start Server ─────────────────────────────────────────────────────────────
+    app.listen(PORT, () => {
+      console.log(`ClinicRx Server running at http://localhost:${PORT}`);
+    });
