@@ -503,7 +503,7 @@ const ClinicService = {
         for (let i = 0; i < candidates.length; i++) {
           for (let j = i + 1; j < candidates.length; j++) {
             const a = candidates[i];
-            const b = candidates[j];
+            const b = candidates[j];D040-6076
 
             if (!newMedicineIds.includes(a) && !newMedicineIds.includes(b)) {
               continue;
