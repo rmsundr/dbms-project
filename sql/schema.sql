@@ -11,7 +11,6 @@ DROP TABLE IF EXISTS prescription_item;
 DROP TABLE IF EXISTS prescription;
 DROP TABLE IF EXISTS medicine_interaction;
 DROP TABLE IF EXISTS medicine_substitute;
-DROP TABLE IF EXISTS specialty_medicine;
 DROP TABLE IF EXISTS master_medicine;
 DROP TABLE IF EXISTS doctor_qualification;
 DROP TABLE IF EXISTS doctor;
@@ -60,17 +59,6 @@ CREATE TABLE master_medicine (
     manufacturer  VARCHAR(100),
     unit_price    DECIMAL(10, 2),
     CONSTRAINT chk_medicine_price CHECK (unit_price IS NULL OR unit_price >= 0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Specialty ↔ Medicine (M:N) — smart filtering
-CREATE TABLE specialty_medicine (
-    speciality_id INT NOT NULL,
-    medicine_id   INT NOT NULL,
-    PRIMARY KEY (speciality_id, medicine_id),
-    CONSTRAINT fk_sm_speciality
-        FOREIGN KEY (speciality_id) REFERENCES speciality(speciality_id) ON DELETE CASCADE,
-    CONSTRAINT fk_sm_medicine
-        FOREIGN KEY (medicine_id) REFERENCES master_medicine(medicine_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Alternate / substitute medicines (1 original → M substitutes)

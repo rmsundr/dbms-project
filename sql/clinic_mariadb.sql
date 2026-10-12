@@ -1,6 +1,6 @@
 -- Clinic E-Prescription Workflow System
 -- Specialty-Based Relational Database Architecture
--- MariaDB / MySQL compatible
+-- MariaDB / MySQL compatible (Combined Schema & Seed Data)
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -11,7 +11,6 @@ DROP TABLE IF EXISTS prescription_item;
 DROP TABLE IF EXISTS prescription;
 DROP TABLE IF EXISTS medicine_interaction;
 DROP TABLE IF EXISTS medicine_substitute;
-DROP TABLE IF EXISTS specialty_medicine;
 DROP TABLE IF EXISTS master_medicine;
 DROP TABLE IF EXISTS doctor_qualification;
 DROP TABLE IF EXISTS doctor;
@@ -19,6 +18,8 @@ DROP TABLE IF EXISTS patient;
 DROP TABLE IF EXISTS speciality;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- ── SCHEMA ───────────────────────────────────────────────────────────────────
 
 CREATE TABLE speciality (
     speciality_id   INT AUTO_INCREMENT PRIMARY KEY,
@@ -60,17 +61,6 @@ CREATE TABLE master_medicine (
     manufacturer  VARCHAR(100),
     unit_price    DECIMAL(10, 2),
     CONSTRAINT chk_medicine_price CHECK (unit_price IS NULL OR unit_price >= 0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Specialty ↔ Medicine (M:N) — smart filtering
-CREATE TABLE specialty_medicine (
-    speciality_id INT NOT NULL,
-    medicine_id   INT NOT NULL,
-    PRIMARY KEY (speciality_id, medicine_id),
-    CONSTRAINT fk_sm_speciality
-        FOREIGN KEY (speciality_id) REFERENCES speciality(speciality_id) ON DELETE CASCADE,
-    CONSTRAINT fk_sm_medicine
-        FOREIGN KEY (medicine_id) REFERENCES master_medicine(medicine_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Alternate / substitute medicines (1 original → M substitutes)
@@ -154,8 +144,8 @@ CREATE INDEX idx_rx_patient ON prescription(patient_id);
 CREATE INDEX idx_rx_doctor ON prescription(doctor_id);
 CREATE INDEX idx_item_medicine ON prescription_item(medicine_id);
 CREATE INDEX idx_item_status ON prescription_item(status);
--- Seed data: small Kerala multi-specialty clinic
--- MariaDB / MySQL compatible (includes live clinic.db rows)
+
+-- ── SEED DATA ────────────────────────────────────────────────────────────────
 
 INSERT INTO speciality (speciality_name) VALUES
     ('Cardiology'),
@@ -211,23 +201,6 @@ INSERT INTO master_medicine (medicine_name, `type`, manufacturer, unit_price) VA
     ('Furosemide',        'Loop diuretic',    'Sanofi',          9.00),
     ('Losartan',          'ARB',              'Torrent',         24.00),
     ('Allopurinol',       'Uric acid',        'Zyloric',         18.00);
-
--- Specialty medicine mapping (smart filtering)
--- Cardiology
-INSERT INTO specialty_medicine VALUES
-    (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 17), (1, 18), (1, 19);
--- Endocrinology
-INSERT INTO specialty_medicine VALUES
-    (2, 8), (2, 9), (2, 10), (2, 11), (2, 3), (2, 5);
--- General Medicine
-INSERT INTO specialty_medicine VALUES
-    (3, 1), (3, 5), (3, 8), (3, 12), (3, 13), (3, 14), (3, 15), (3, 16), (3, 19);
--- Geriatrics
-INSERT INTO specialty_medicine VALUES
-    (4, 1), (4, 3), (4, 4), (4, 5), (4, 8), (4, 12), (4, 14), (4, 15), (4, 19);
--- Nephrology
-INSERT INTO specialty_medicine VALUES
-    (5, 6), (5, 17), (5, 18), (5, 19), (5, 20), (5, 5), (5, 8);
 
 -- Substitutes (alternate relationship)
 INSERT INTO medicine_substitute VALUES
