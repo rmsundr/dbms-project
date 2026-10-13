@@ -252,4 +252,4 @@ INSERT INTO prescription_item (prescription_no, item_no, medicine_id, dosage, fr
     (3, 1, 5,  '5 mg',   'Once daily',  'Ongoing', 'active'),   -- Amlodipine
     (3, 2, 12, '500 mg', 'As needed',   '7 days',  'past'),     -- Paracetamol
     (4, 1, 14, '20 mg',  'Once daily',  '14 days', 'active'),   -- Omeprazole
-    (5, 1, 12, '500 mg', 'SOS',         '3 days',  'active');   -- Paracetamol
+    (5, 1, 12, '500 mg', 'SOS',         '3 days',  'active');   -- Paracetamolx
