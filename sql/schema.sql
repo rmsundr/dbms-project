@@ -13,6 +13,8 @@ DROP TABLE IF EXISTS medicine_interaction;
 DROP TABLE IF EXISTS medicine_substitute;
 DROP TABLE IF EXISTS master_medicine;
 DROP TABLE IF EXISTS doctor_qualification;
+DROP TABLE IF EXISTS user_account;
+DROP TABLE IF EXISTS staff;
 DROP TABLE IF EXISTS doctor;
 DROP TABLE IF EXISTS patient;
 DROP TABLE IF EXISTS speciality;
@@ -41,6 +43,38 @@ CREATE TABLE doctor_qualification (
     CONSTRAINT fk_dq_doctor
         FOREIGN KEY (doctor_id) REFERENCES doctor(doctor_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--login(staff table)
+CREATE TABLE staff (
+    staff_id INT AUTO_INCREMENT PRIMARY KEY,
+    staff_name VARCHAR(150) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    contact_no VARCHAR(20)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--login(account table)
+CREATE TABLE user_account (
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('OWNER', 'DOCTOR', 'STAFF') NOT NULL,
+
+    doctor_id INT NULL,
+    staff_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_user_doctor
+        FOREIGN KEY (doctor_id)
+        REFERENCES doctor(doctor_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_user_staff
+        FOREIGN KEY (staff_id)
+        REFERENCES staff(staff_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
 
 CREATE TABLE patient (
     patient_id   INT AUTO_INCREMENT PRIMARY KEY,
@@ -142,3 +176,9 @@ CREATE INDEX idx_rx_patient ON prescription(patient_id);
 CREATE INDEX idx_rx_doctor ON prescription(doctor_id);
 CREATE INDEX idx_item_medicine ON prescription_item(medicine_id);
 CREATE INDEX idx_item_status ON prescription_item(status);
+
+--login(indexes add)
+CREATE INDEX idx_user_email ON user_account(email);
+CREATE INDEX idx_user_role ON user_account(role);
+CREATE INDEX idx_user_doctor ON user_account(doctor_id);
+CREATE INDEX idx_user_staff ON user_account(staff_id);

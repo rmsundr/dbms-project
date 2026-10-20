@@ -1,31 +1,241 @@
- const express = require('express');                                                                                                 
-    const cors = require('cors');                                                                                                       
-    const mysql = require('mysql2/promise');                                                                                            
-    const path = require('path');                                                                                                       
-    require('dotenv').config();                                                                                                         
-                                                                                                                                        
-    const app = express();                                                                                                              
-    const PORT = process.env.PORT || 5000;                                                                                              
-                                                                                                                                        
-    // ── Middleware ───────────────────────────────────────────────────────────────                                                    
-    app.use(cors());                                                                                                                    
-    app.use(express.json());                                                                                                            
-                                                                                                                                        
-    // Serve static frontend files (index.html, static/css, static/js)                                                                  
-    app.use(express.static(path.join(__dirname)));                                                                                      
-                                                                                                                                        
-    // ── Database Connection Pool ─────────────────────────────────────────────────                                                    
+const express = require('express');
+const cors = require('cors');
+const mysql = require('mysql2/promise');
+const path = require('path');
+
+// login(added)
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// login(added)
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET is not configured in .env');
+}
+
+// ── Database Connection Pool ─────────────────────────────────────────────────
 const pool = mysql.createPool({
   host: process.env.DB_HOST || process.env.MARIADB_HOST || '127.0.0.1',
   port: Number(process.env.DB_PORT || process.env.MARIADB_PORT) || 3306,
   user: process.env.DB_USER || process.env.MARIADB_USER || 'clinic_user',
   password: process.env.DB_PASSWORD || process.env.MARIADB_PASSWORD || 'clinic123',
-  database: process.env.DB_NAME || process.env.MARIADB_DATABASE || 'clinic',                                                                                        
-      waitForConnections: true,                                                                                                         
-      connectionLimit: 10,                                                                                                              
-      queueLimit: 0,                                                                                                                    
-    });                                                                                                                                 
-                                                                                                                                        
+  database: process.env.DB_NAME || process.env.MARIADB_DATABASE || 'clinic',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
+
+// ── Middleware ───────────────────────────────────────────────────────────────
+app.use(cors());
+app.use(express.json());
+
+// Serve static frontend files
+app.use(express.static(path.join(__dirname)));
+
+// login(owner api)
+app.post('/api/auth/register-owner', async (req, res) => {
+  const { email, password, confirmPassword } = req.body;
+
+  if (!email || !password || !confirmPassword) {
+    return res.status(400).json({
+      error: 'Email, password, and confirm password are required'
+    });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!emailPattern.test(cleanEmail)) {
+    return res.status(400).json({
+      error: 'Please enter a valid email address'
+    });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({
+      error: 'Password must be at least 6 characters'
+    });
+  }
+
+  if (password !== confirmPassword) {
+    return res.status(400).json({
+      error: 'Passwords do not match'
+    });
+  }
+
+  try {
+    const [existingUsers] = await pool.query(
+      'SELECT user_id FROM user_account WHERE email = ?',
+      [cleanEmail]
+    );
+
+    if (existingUsers.length > 0) {
+      return res.status(409).json({
+        error: 'An account with this email already exists'
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const [result] = await pool.query(
+      `INSERT INTO user_account
+      (email, password_hash, role)
+      VALUES (?, ?, 'OWNER')`,
+      [cleanEmail, passwordHash]
+    );
+
+    return res.status(201).json({
+      message: 'Owner account created successfully',
+      user: {
+        user_id: result.insertId,
+        email: cleanEmail,
+        role: 'OWNER'
+      }
+    });
+  } catch (err) {
+    console.error('Owner registration error:', err);
+
+    return res.status(500).json({
+      error: 'Unable to create owner account'
+    });
+  }
+});
+
+// login(login api)
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password, role } = req.body;
+
+  if (!email || !password || !role) {
+    return res.status(400).json({
+      error: 'Email, password, and role are required'
+    });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanRole = role.trim().toUpperCase();
+
+  if (!['OWNER', 'DOCTOR', 'STAFF'].includes(cleanRole)) {
+    return res.status(400).json({
+      error: 'Invalid role'
+    });
+  }
+
+  try {
+    const [users] = await pool.query(
+      `SELECT user_id, email, password_hash, role, doctor_id, staff_id
+      FROM user_account
+      WHERE email = ?`,
+      [cleanEmail]
+    );
+
+    if (users.length === 0) {
+      return res.status(401).json({
+        error: 'Invalid email or password'
+      });
+    }
+
+    const user = users[0];
+
+    if (user.role !== cleanRole) {
+      return res.status(403).json({
+        error: 'This account does not belong to the selected role'
+      });
+    }
+
+    const passwordMatches = await bcrypt.compare(
+      password,
+      user.password_hash
+    );
+
+    if (!passwordMatches) {
+      return res.status(401).json({
+        error: 'Invalid email or password'
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        user_id: user.user_id,
+        email: user.email,
+        role: user.role,
+        doctor_id: user.doctor_id,
+        staff_id: user.staff_id
+      },
+      JWT_SECRET,
+      {
+        expiresIn: '8h'
+      }
+    );
+
+    return res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        user_id: user.user_id,
+        email: user.email,
+        role: user.role,
+        doctor_id: user.doctor_id,
+        staff_id: user.staff_id
+      }
+    });
+  } catch (err) {
+    console.error('Login error:', err);
+
+    return res.status(500).json({
+      error: 'Unable to login'
+    });
+  }
+});
+
+// login(authentication middleware)
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      error: 'Authentication required'
+    });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    req.user = decoded;
+
+    next();
+  } catch (err) {
+    return res.status(401).json({
+      error: 'Invalid or expired token'
+    });
+  }
+}
+
+// login(owner only middleware)
+function requireOwner(req, res, next) {
+  if (req.user.role !== 'OWNER') {
+    return res.status(403).json({
+      error: 'Owner access required'
+    });
+  }
+
+  next();
+}
+
+// login(/me endpoint)
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  res.json({
+    user: req.user
+  });
+});
+
     // Helper: Age calculation from Date of Birth                                                                                       
     function calculateAge(dob) {                                                                                                        
       if (!dob) return 0;                                                                                                               
