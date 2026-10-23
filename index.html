@@ -18,9 +18,9 @@
         <select id="login-role" required>
           <option value="owner">Owner</option>
           <option value="doctor">Doctor</option>
-          <option value="staff">Staff</option>
         </select>
-        <input id="login-user" placeholder="Username" required />
+        <input id="login-user" placeholder="Owner Username" />
+        <select id="login-doctor-select" class="hidden"></select>
         <input id="login-pass" type="password" placeholder="Password" required />
         <button class="btn primary" type="submit">Login</button>
         <button class="btn ghost" type="button" id="btn-owner-signup">Create Owner Account</button>
@@ -186,15 +186,16 @@
       <!-- login(updated content) -->
       <section id="view-accounts" class="view">
         <div class="panel" style="max-width:420px">
-          <h3>Create Staff / Doctor Account</h3>
+          <h3>Create Doctor Account</h3>
           <form id="create-account-form" class="patient-form">
-            <select id="new-account-role" required>
-              <option value="staff">Staff</option>
-              <option value="doctor">Doctor</option>
+            <input id="new-account-user" placeholder="Doctor Name (e.g. Dr. Name)" required />
+            <input id="new-doctor-contact" placeholder="Contact number" required />
+            <select id="new-doctor-speciality" required>
+              <option value="">Select specialty…</option>
             </select>
-            <input id="new-account-user" placeholder="Username" required />
+            <input id="new-doctor-qualification" placeholder="Qualifications (e.g. MBBS, MD)" required />
             <input id="new-account-pass" type="password" placeholder="Password" required />
-            <button class="btn primary" type="submit">Create Account</button>
+            <button class="btn primary" type="submit">Create Doctor Account</button>
           </form>
         </div>
       </section>
@@ -210,6 +211,21 @@
         <button class="btn ghost" type="button" id="btn-cancel-logout">Cancel</button>
         <button class="btn danger" type="button" id="btn-confirm-logout">Confirm Logout</button>
       </div>
+    </div>
+  </div>
+
+  <!-- login(updated content) -->
+  <div id="switch-doctor-window" class="auth-overlay hidden">
+    <div class="panel auth-box">
+      <h3>Switch Doctor</h3>
+      <p class="muted" id="switch-doctor-info">Enter password to switch doctor</p>
+      <form id="switch-doctor-form" class="patient-form">
+        <input id="switch-doctor-pass" type="password" placeholder="Doctor Password" required />
+        <div class="actions">
+          <button class="btn ghost" type="button" id="btn-cancel-switch">Cancel</button>
+          <button class="btn primary" type="submit">Verify &amp; Switch</button>
+        </div>
+      </form>
     </div>
   </div>
 

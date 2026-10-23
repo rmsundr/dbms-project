@@ -151,5 +151,5 @@ CREATE TABLE users (
     username   VARCHAR(100) NOT NULL UNIQUE,
     password   VARCHAR(100) NOT NULL,
     role       VARCHAR(20) NOT NULL,
-    CONSTRAINT chk_user_role CHECK (role IN ('owner', 'staff', 'doctor'))
+    CONSTRAINT chk_user_role CHECK (role IN ('owner', 'doctor'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

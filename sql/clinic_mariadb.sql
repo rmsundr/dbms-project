@@ -153,7 +153,7 @@ CREATE TABLE users (
     username   VARCHAR(100) NOT NULL UNIQUE,
     password   VARCHAR(100) NOT NULL,
     role       VARCHAR(20) NOT NULL,
-    CONSTRAINT chk_user_role CHECK (role IN ('owner', 'staff', 'doctor'))
+    CONSTRAINT chk_user_role CHECK (role IN ('owner', 'doctor'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── SEED DATA ────────────────────────────────────────────────────────────────
@@ -264,3 +264,11 @@ INSERT INTO prescription_item (prescription_no, item_no, medicine_id, dosage, fr
     (3, 2, 12, '500 mg', 'As needed',   '7 days',  'past'),     -- Paracetamol
     (4, 1, 14, '20 mg',  'Once daily',  '14 days', 'active'),   -- Omeprazole
     (5, 1, 12, '500 mg', 'SOS',         '3 days',  'active');   -- Paracetamolx
+
+-- login(updated content)
+INSERT INTO users (username, password, role) VALUES
+    ('Dr. Anitha Menon',   'Dr. Anitha Menon',   'doctor'),
+    ('Dr. Rajesh Kumar',   'Dr. Rajesh Kumar',   'doctor'),
+    ('Dr. Sreelatha Nair', 'Dr. Sreelatha Nair', 'doctor'),
+    ('Dr. Mohammed Ali',   'Dr. Mohammed Ali',   'doctor'),
+    ('Dr. Priya Varma',    'Dr. Priya Varma',    'doctor');

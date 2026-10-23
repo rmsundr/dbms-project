@@ -460,14 +460,35 @@ const pool = mysql.createPool({
 
     // login(updated content)
     // ── 7. Role-Based Login System ───────────────────────────────────────────────
-    pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        user_id INT AUTO_INCREMENT PRIMARY KEY,
-        username VARCHAR(100) NOT NULL UNIQUE,
-        password VARCHAR(100) NOT NULL,
-        role VARCHAR(20) NOT NULL
-      )
-    `).catch((err) => console.error('Error creating users table:', err));
+    (async () => {
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS users (
+            user_id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(100) NOT NULL UNIQUE,
+            password VARCHAR(100) NOT NULL,
+            role VARCHAR(20) NOT NULL
+          )
+        `);
+        await pool.query(`
+          INSERT IGNORE INTO users (username, password, role) VALUES
+            ('Dr. Anitha Menon',   'Dr. Anitha Menon',   'doctor'),
+            ('Dr. Rajesh Kumar',   'Dr. Rajesh Kumar',   'doctor'),
+            ('Dr. Sreelatha Nair', 'Dr. Sreelatha Nair', 'doctor'),
+            ('Dr. Mohammed Ali',   'Dr. Mohammed Ali',   'doctor'),
+            ('Dr. Priya Varma',    'Dr. Priya Varma',    'doctor')
+        `);
+        const [docUsers] = await pool.query("SELECT username FROM users WHERE role = 'doctor'");
+        for (const u of docUsers) {
+          const [exists] = await pool.query('SELECT doctor_id FROM doctor WHERE doctor_name = ?', [u.username]);
+          if (!exists.length) {
+            await pool.query('INSERT INTO doctor (doctor_name, speciality_id) VALUES (?, 3)', [u.username]);
+          }
+        }
+      } catch (err) {
+        console.error('Error initializing users table:', err);
+      }
+    })();
 
     // POST /api/owner/signup — Owner creates account
     app.post('/api/owner/signup', async (req, res) => {
@@ -486,7 +507,7 @@ const pool = mysql.createPool({
       }
     });
 
-    // POST /api/login — Role-based login (owner, staff, doctor)
+    // POST /api/login — Role-based login (owner, doctor)
     app.post('/api/login', async (req, res) => {
       const { username, password, role } = req.body;
       try {
@@ -503,23 +524,41 @@ const pool = mysql.createPool({
       }
     });
 
-    // POST /api/users/create — Owner creates staff and doctor accounts
+    // POST /api/users/create — Owner creates doctor account with full doctor details
     app.post('/api/users/create', async (req, res) => {
-      const { owner_role, username, password, role } = req.body;
+      const { owner_role, username, password, contact_no, speciality_id, qualification } = req.body;
       if (owner_role !== 'owner') {
-        return res.status(403).json({ error: 'Only owner can create accounts' });
+        return res.status(403).json({ error: 'Only owner can create doctor accounts' });
       }
-      if (!username || !password || !['staff', 'doctor'].includes(role)) {
-        return res.status(400).json({ error: 'Valid username, password, and role required' });
+      if (!username || !password || !speciality_id) {
+        return res.status(400).json({ error: 'Doctor name, specialty, and password are required' });
       }
       try {
+        const docName = username.trim();
         await pool.query(
-          'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-          [username.trim(), password, role]
+          "INSERT INTO users (username, password, role) VALUES (?, ?, 'doctor')",
+          [docName, password]
         );
-        res.status(201).json({ message: `${role} account created` });
+        const [docRes] = await pool.query(
+          'INSERT INTO doctor (doctor_name, contact_no, speciality_id) VALUES (?, ?, ?)',
+          [docName, contact_no ? contact_no.trim() : null, Number(speciality_id)]
+        );
+        const newDoctorId = docRes.insertId;
+        if (qualification) {
+          const quals = String(qualification)
+            .split(',')
+            .map((q) => q.trim())
+            .filter(Boolean);
+          for (const q of quals) {
+            await pool.query(
+              'INSERT IGNORE INTO doctor_qualification (doctor_id, qualification) VALUES (?, ?)',
+              [newDoctorId, q]
+            );
+          }
+        }
+        res.status(201).json({ message: 'Doctor account created', doctor_id: newDoctorId });
       } catch (err) {
-        res.status(400).json({ error: 'Username already exists' });
+        res.status(400).json({ error: 'Doctor username already exists or invalid data' });
       }
     });
   
