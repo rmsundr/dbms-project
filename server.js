@@ -457,6 +457,71 @@ const pool = mysql.createPool({
         res.status(500).json({ error: 'Database error fetching stats' });
       }
     });
+
+    // login(updated content)
+    // ── 7. Role-Based Login System ───────────────────────────────────────────────
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        user_id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(100) NOT NULL UNIQUE,
+        password VARCHAR(100) NOT NULL,
+        role VARCHAR(20) NOT NULL
+      )
+    `).catch((err) => console.error('Error creating users table:', err));
+
+    // POST /api/owner/signup — Owner creates account
+    app.post('/api/owner/signup', async (req, res) => {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password required' });
+      }
+      try {
+        await pool.query(
+          "INSERT INTO users (username, password, role) VALUES (?, ?, 'owner')",
+          [username.trim(), password]
+        );
+        res.status(201).json({ message: 'Owner account created' });
+      } catch (err) {
+        res.status(400).json({ error: 'Username already exists' });
+      }
+    });
+
+    // POST /api/login — Role-based login (owner, staff, doctor)
+    app.post('/api/login', async (req, res) => {
+      const { username, password, role } = req.body;
+      try {
+        const [rows] = await pool.query(
+          'SELECT user_id, username, role FROM users WHERE username = ? AND password = ? AND role = ?',
+          [username, password, role]
+        );
+        if (!rows.length) {
+          return res.status(401).json({ error: 'Invalid username, password, or role' });
+        }
+        res.json(rows[0]);
+      } catch (err) {
+        res.status(500).json({ error: 'Database error during login' });
+      }
+    });
+
+    // POST /api/users/create — Owner creates staff and doctor accounts
+    app.post('/api/users/create', async (req, res) => {
+      const { owner_role, username, password, role } = req.body;
+      if (owner_role !== 'owner') {
+        return res.status(403).json({ error: 'Only owner can create accounts' });
+      }
+      if (!username || !password || !['staff', 'doctor'].includes(role)) {
+        return res.status(400).json({ error: 'Valid username, password, and role required' });
+      }
+      try {
+        await pool.query(
+          'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
+          [username.trim(), password, role]
+        );
+        res.status(201).json({ message: `${role} account created` });
+      } catch (err) {
+        res.status(400).json({ error: 'Username already exists' });
+      }
+    });
   
     // ── Start Server ─────────────────────────────────────────────────────────────
     app.listen(PORT, () => {

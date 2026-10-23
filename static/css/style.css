@@ -810,3 +810,20 @@ th {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* login(updated content) */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 36, 40, 0.55);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+
+.auth-box {
+  width: 100%;
+  max-width: 360px;
+  background: var(--surface-solid);
+}

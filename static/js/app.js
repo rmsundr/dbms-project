@@ -646,6 +646,55 @@ const ClinicService = {
       };
     });
   },
+
+  // login(updated content)
+  async ownerSignup(username, password) {
+    return request(
+      "/owner/signup",
+      { method: "POST", body: JSON.stringify({ username, password }) },
+      () => {
+        if (!db.users) db.users = [];
+        if (db.users.some((u) => u.username === username)) {
+          throw new Error("Username already exists");
+        }
+        db.users.push({ user_id: db.users.length + 1, username, password, role: "owner" });
+        saveDatabase();
+        return { message: "Owner account created" };
+      }
+    );
+  },
+
+  async login(username, password, role) {
+    return request(
+      "/login",
+      { method: "POST", body: JSON.stringify({ username, password, role }) },
+      () => {
+        if (!db.users) db.users = [];
+        const user = db.users.find(
+          (u) => u.username === username && u.password === password && u.role === role
+        );
+        if (!user) throw new Error("Invalid username, password, or role");
+        return { user_id: user.user_id, username: user.username, role: user.role };
+      }
+    );
+  },
+
+  async createAccount(owner_role, username, password, role) {
+    return request(
+      "/users/create",
+      { method: "POST", body: JSON.stringify({ owner_role, username, password, role }) },
+      () => {
+        if (owner_role !== "owner") throw new Error("Only owner can create accounts");
+        if (!db.users) db.users = [];
+        if (db.users.some((u) => u.username === username)) {
+          throw new Error("Username already exists");
+        }
+        db.users.push({ user_id: db.users.length + 1, username, password, role });
+        saveDatabase();
+        return { message: `${role} account created` };
+      }
+    );
+  },
 };
 
 // ── Application UI State ─────────────────────────────────────────────────────
@@ -655,6 +704,8 @@ const state = {
   draft: [], // { medicine_id, medicine_name, dosage, frequency, duration }
   conflicts: null,
   selectedPatientId: null,
+  // login(updated content)
+  currentUser: null,
 };
 
 const titles = {
@@ -663,6 +714,8 @@ const titles = {
   patients: ["Patients", "Unified records shared across all specialties"],
   medicines: ["Medicines", "Single master list — one source of truth"],
   interactions: ["Conflicts", "Predefined drug–drug interaction rules"],
+  // login(updated content)
+  accounts: ["Create Accounts", "Owner creates staff and doctor accounts"],
 };
 
 function toast(msg) {
@@ -1139,8 +1192,84 @@ async function loadInteractions() {
     .join("");
 }
 
+// login(updated content)
+function initLoginSystem() {
+  const loginWin = document.getElementById("login-window");
+  const logoutWin = document.getElementById("logout-window");
+  const appShell = document.getElementById("app-shell");
+  const navAccounts = document.getElementById("nav-accounts");
+  const navPrescribe = document.querySelector('.nav-btn[data-view="prescribe"]');
+
+  document.getElementById("btn-owner-signup").addEventListener("click", async () => {
+    const user = document.getElementById("login-user").value.trim();
+    const pass = document.getElementById("login-pass").value;
+    if (!user || !pass) return toast("Enter username and password");
+    try {
+      await ClinicService.ownerSignup(user, pass);
+      document.getElementById("login-role").value = "owner";
+      toast("Owner account created. You can login now.");
+    } catch (err) {
+      toast(err.message || "Owner signup failed");
+    }
+  });
+
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const role = document.getElementById("login-role").value;
+    const user = document.getElementById("login-user").value.trim();
+    const pass = document.getElementById("login-pass").value;
+    try {
+      state.currentUser = await ClinicService.login(user, pass, role);
+      loginWin.classList.add("hidden");
+      appShell.classList.remove("hidden");
+      navAccounts.classList.toggle("hidden", role !== "owner");
+      navPrescribe.classList.toggle("hidden", role === "staff");
+      showView("dashboard");
+      toast(`Logged in as ${user} (${role})`);
+    } catch (err) {
+      toast("Invalid username, password, or role");
+    }
+  });
+
+  document.getElementById("create-account-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const role = document.getElementById("new-account-role").value;
+    const user = document.getElementById("new-account-user").value.trim();
+    const pass = document.getElementById("new-account-pass").value;
+    try {
+      await ClinicService.createAccount(state.currentUser?.role, user, pass, role);
+      e.target.reset();
+      toast(`${role} account created`);
+    } catch (err) {
+      toast(err.message || "Failed to create account");
+    }
+  });
+
+  document.getElementById("btn-open-logout").addEventListener("click", () => {
+    document.getElementById("logout-user-info").textContent = state.currentUser
+      ? `Logged in as ${state.currentUser.username} (${state.currentUser.role}). Confirm logout?`
+      : "Are you sure you want to logout?";
+    logoutWin.classList.remove("hidden");
+  });
+
+  document.getElementById("btn-cancel-logout").addEventListener("click", () => {
+    logoutWin.classList.add("hidden");
+  });
+
+  document.getElementById("btn-confirm-logout").addEventListener("click", () => {
+    state.currentUser = null;
+    document.getElementById("login-form").reset();
+    logoutWin.classList.add("hidden");
+    appShell.classList.add("hidden");
+    loginWin.classList.remove("hidden");
+    toast("Logged out");
+  });
+}
+
 // ── Start Application ────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
+  // login(updated content)
+  initLoginSystem();
   boot().catch((err) => {
     console.error(err);
     toast("Failed to initialize clinic data");

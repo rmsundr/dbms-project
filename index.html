@@ -10,7 +10,26 @@
   <link rel="stylesheet" href="static/css/style.css" />
 </head>
 <body>
-  <div class="app-shell">
+  <!-- login(updated content) -->
+  <div id="login-window" class="auth-overlay">
+    <div class="panel auth-box">
+      <h2>ClinicRx Login</h2>
+      <form id="login-form" class="patient-form">
+        <select id="login-role" required>
+          <option value="owner">Owner</option>
+          <option value="doctor">Doctor</option>
+          <option value="staff">Staff</option>
+        </select>
+        <input id="login-user" placeholder="Username" required />
+        <input id="login-pass" type="password" placeholder="Password" required />
+        <button class="btn primary" type="submit">Login</button>
+        <button class="btn ghost" type="button" id="btn-owner-signup">Create Owner Account</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- login(updated content) -->
+  <div id="app-shell" class="app-shell hidden">
     <aside class="sidebar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"></span>
@@ -25,6 +44,8 @@
         <button class="nav-btn" data-view="patients">Patients</button>
         <button class="nav-btn" data-view="medicines">Medicines</button>
         <button class="nav-btn" data-view="interactions">Conflicts</button>
+        <!-- login(updated content) -->
+        <button class="nav-btn hidden" id="nav-accounts" data-view="accounts">Create Accounts</button>
       </nav>
       <p class="sidebar-foot">Specialty-based · Unified record</p>
     </aside>
@@ -38,6 +59,8 @@
         <div class="doctor-picker">
           <label for="session-doctor">Signed in as</label>
           <select id="session-doctor"></select>
+          <!-- login(updated content) -->
+          <button class="btn ghost small" type="button" id="btn-open-logout">Logout</button>
         </div>
       </header>
 
@@ -159,7 +182,35 @@
           <div id="interaction-list" class="interaction-list"></div>
         </div>
       </section>
+
+      <!-- login(updated content) -->
+      <section id="view-accounts" class="view">
+        <div class="panel" style="max-width:420px">
+          <h3>Create Staff / Doctor Account</h3>
+          <form id="create-account-form" class="patient-form">
+            <select id="new-account-role" required>
+              <option value="staff">Staff</option>
+              <option value="doctor">Doctor</option>
+            </select>
+            <input id="new-account-user" placeholder="Username" required />
+            <input id="new-account-pass" type="password" placeholder="Password" required />
+            <button class="btn primary" type="submit">Create Account</button>
+          </form>
+        </div>
+      </section>
     </main>
+  </div>
+
+  <!-- login(updated content) -->
+  <div id="logout-window" class="auth-overlay hidden">
+    <div class="panel auth-box">
+      <h3>Logout Window</h3>
+      <p class="muted" id="logout-user-info">Are you sure you want to logout?</p>
+      <div class="actions">
+        <button class="btn ghost" type="button" id="btn-cancel-logout">Cancel</button>
+        <button class="btn danger" type="button" id="btn-confirm-logout">Confirm Logout</button>
+      </div>
+    </div>
   </div>
 
   <div id="toast" class="toast hidden" role="status"></div>
