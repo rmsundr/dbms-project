@@ -436,7 +436,51 @@ const pool = mysql.createPool({
         res.status(500).json({ error: 'Database error updating status' });                                                              
       }
     });
-  
+
+    // ── Authentication API ───────────────────────────────────────────────────────
+    app.post('/api/auth/login', async (req, res) => {
+      const { username, role, specialty_id, doctor_id } = req.body;
+      try {
+        let query = 'SELECT u.*, d.doctor_name, s.speciality_name FROM clinic_user u LEFT JOIN doctor d ON u.doctor_id = d.doctor_id LEFT JOIN speciality s ON u.speciality_id = s.speciality_id WHERE u.role = ?';
+        let params = [role];
+        if (doctor_id) {
+          query += ' AND u.doctor_id = ?';
+          params.push(doctor_id);
+        } else if (specialty_id) {
+          query += ' AND u.speciality_id = ?';
+          params.push(specialty_id);
+        } else if (username) {
+          query += ' AND u.username = ?';
+          params.push(username);
+        }
+        const [rows] = await pool.query(query, params);
+        if (rows.length === 0) {
+          return res.json({
+            success: true,
+            user: {
+              id: doctor_id || specialty_id || 'U1',
+              name: username || 'User',
+              role: role,
+              specialty: 'General Medicine'
+            }
+          });
+        }
+        const u = rows[0];
+        res.json({
+          success: true,
+          user: {
+            id: u.doctor_id || u.user_id,
+            name: u.full_name || u.username,
+            role: u.role,
+            specialty: u.speciality_name || 'General Medicine'
+          }
+        });
+      } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: 'Authentication database error' });
+      }
+    });
+
     // ── 6. Dashboard Statistics ──────────────────────────────────────────────────
   
     // GET /api/stats — Real-time counts for the dashboard

@@ -44,6 +44,20 @@ CREATE TABLE doctor_qualification (
         FOREIGN KEY (doctor_id) REFERENCES doctor(doctor_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Clinic User Authentication & RBAC
+CREATE TABLE clinic_user (
+    user_id       INT AUTO_INCREMENT PRIMARY KEY,
+    username      VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    full_name     VARCHAR(150) NOT NULL,
+    role          VARCHAR(20) NOT NULL, -- 'doctor', 'staff', 'admin'
+    speciality_id INT NULL,             -- linked specialty if role = 'doctor'
+    doctor_id     INT NULL,             -- linked doctor if role = 'doctor'
+    CONSTRAINT chk_user_role CHECK (role IN ('doctor', 'staff', 'admin')),
+    CONSTRAINT fk_user_speciality FOREIGN KEY (speciality_id) REFERENCES speciality(speciality_id) ON DELETE SET NULL,
+    CONSTRAINT fk_user_doctor FOREIGN KEY (doctor_id) REFERENCES doctor(doctor_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE patient (
     patient_id   INT AUTO_INCREMENT PRIMARY KEY,
     patient_name VARCHAR(150) NOT NULL,

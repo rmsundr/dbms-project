@@ -677,6 +677,25 @@ function doctorId() {
   return Number(document.getElementById("session-doctor").value);
 }
 
+// ── Authentication Check ──────────────────────────────────────────────────────
+function checkAuth() {
+  const logged = localStorage.getItem("clinic_logged");
+  const role = localStorage.getItem("clinic_role");
+  const user = localStorage.getItem("clinic_user");
+  if (logged !== "true" || !role || !user) {
+    window.location.href = "login.html";
+    return null;
+  }
+  return { role, user: JSON.parse(user) };
+}
+
+function handleLogout() {
+  localStorage.removeItem("clinic_logged");
+  localStorage.removeItem("clinic_role");
+  localStorage.removeItem("clinic_user");
+  window.location.href = "login.html";
+}
+
 function showView(name) {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   document.getElementById(`view-${name}`).classList.add("active");
@@ -696,6 +715,12 @@ function showView(name) {
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 async function boot() {
+  const auth = checkAuth();
+  if (!auth) {
+    document.getElementById("toast").classList.add("hidden");
+    return;
+  }
+
   state.doctors = await ClinicService.getDoctors();
   state.patients = await ClinicService.getPatients();
 
@@ -741,6 +766,7 @@ async function boot() {
     document.getElementById("patient-form").classList.toggle("hidden");
   });
   document.getElementById("patient-form").addEventListener("submit", registerPatient);
+  document.getElementById("btn-logout").addEventListener("click", handleLogout);
 
   loadStats();
 }
