@@ -108,12 +108,10 @@ INSERT INTO prescription_item (prescription_no, item_no, medicine_id, dosage, fr
     (4, 1, 14, '20 mg',  'Once daily',  '14 days', 'active'),   -- Omeprazole
     (5, 1, 12, '500 mg', 'SOS',         '3 days',  'active');   -- Paracetamol
 
--- Clinic User Authentication & Specialty Logins
-INSERT INTO clinic_user (username, password_hash, full_name, role, speciality_id, doctor_id) VALUES
-    ('login.general',      '$2y$10$general_hash',      'Dr. Sreelatha Nair',  'doctor', 3, 3),
-    ('login.cardiology',   '$2y$10$cardiology_hash',   'Dr. Anitha Menon',    'doctor', 1, 1),
-    ('login.endocrinology','$2y$10$endocrinology_hash','Dr. Rajesh Kumar',    'doctor', 2, 2),
-    ('login.geriatrics',   '$2y$10$geriatrics_hash',   'Dr. Mohammed Ali',    'doctor', 4, 4),
-    ('login.nephrology',   '$2y$10$nephrology_hash',   'Dr. Priya Varma',     'doctor', 5, 5),
-    ('staff.reception',    '$2y$10$staff_hash',        'Anjali Staff',        'staff',  NULL, NULL),
-    ('admin.root',         '$2y$10$admin_hash',        'System Admin',        'admin',  NULL, NULL);
+-- login(updated content)
+INSERT INTO users (username, password, role) VALUES
+    ('Dr. Anitha Menon',   'Dr. Anitha Menon',   'doctor'),
+    ('Dr. Rajesh Kumar',   'Dr. Rajesh Kumar',   'doctor'),
+    ('Dr. Sreelatha Nair', 'Dr. Sreelatha Nair', 'doctor'),
+    ('Dr. Mohammed Ali',   'Dr. Mohammed Ali',   'doctor'),
+    ('Dr. Priya Varma',    'Dr. Priya Varma',    'doctor');

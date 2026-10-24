@@ -248,6 +248,15 @@ const INITIAL_DATA = {
       ],
     },
   ],
+
+  // login(updated content)
+  users: [
+    { user_id: 1, username: "Dr. Anitha Menon", password: "Dr. Anitha Menon", role: "doctor" },
+    { user_id: 2, username: "Dr. Rajesh Kumar", password: "Dr. Rajesh Kumar", role: "doctor" },
+    { user_id: 3, username: "Dr. Sreelatha Nair", password: "Dr. Sreelatha Nair", role: "doctor" },
+    { user_id: 4, username: "Dr. Mohammed Ali", password: "Dr. Mohammed Ali", role: "doctor" },
+    { user_id: 5, username: "Dr. Priya Varma", password: "Dr. Priya Varma", role: "doctor" },
+  ],
 };
 
 // ── In-Memory Store with LocalStorage Persistence ────────────────────────────
@@ -268,6 +277,26 @@ function loadDatabase() {
 }
 
 let db = loadDatabase();
+// login(updated content)
+if (!db.users) db.users = cloneDeep(INITIAL_DATA.users);
+INITIAL_DATA.users.forEach((su) => {
+  if (!db.users.some((u) => u.username === su.username)) db.users.push({ ...su });
+});
+db.users
+  .filter((u) => u.role === "doctor")
+  .forEach((u) => {
+    if (!db.doctors.some((d) => d.doctor_name === u.username)) {
+      const nextId = (db.doctors.reduce((m, d) => Math.max(m, d.doctor_id), 0) || 0) + 1;
+      db.doctors.push({
+        doctor_id: nextId,
+        doctor_name: u.username,
+        contact_no: "",
+        speciality_id: 3,
+        speciality_name: "General Medicine",
+        qualifications: [],
+      });
+    }
+  });
 
 function saveDatabase() {
   try {
@@ -646,6 +675,81 @@ const ClinicService = {
       };
     });
   },
+
+  // login(updated content)
+  async ownerSignup(username, password) {
+    return request(
+      "/owner/signup",
+      { method: "POST", body: JSON.stringify({ username, password }) },
+      () => {
+        if (!db.users) db.users = [];
+        if (db.users.some((u) => u.username === username)) {
+          throw new Error("Username already exists");
+        }
+        db.users.push({ user_id: db.users.length + 1, username, password, role: "owner" });
+        saveDatabase();
+        return { message: "Owner account created" };
+      }
+    );
+  },
+
+  async login(username, password, role) {
+    return request(
+      "/login",
+      { method: "POST", body: JSON.stringify({ username, password, role }) },
+      () => {
+        if (!db.users) db.users = [];
+        const user = db.users.find(
+          (u) => u.username === username && u.password === password && u.role === role
+        );
+        if (!user) throw new Error("Invalid username, password, or role");
+        return { user_id: user.user_id, username: user.username, role: user.role };
+      }
+    );
+  },
+
+  async getSpecialties() {
+    return request("/specialties", { method: "GET" }, () => {
+      return db.specialities.map((s) => ({ ...s }));
+    });
+  },
+
+  async createAccount({ owner_role, username, password, contact_no, speciality_id, qualification }) {
+    return request(
+      "/users/create",
+      {
+        method: "POST",
+        body: JSON.stringify({ owner_role, username, password, contact_no, speciality_id, qualification }),
+      },
+      () => {
+        if (owner_role !== "owner") throw new Error("Only owner can create doctor accounts");
+        if (!db.users) db.users = [];
+        if (db.users.some((u) => u.username === username)) {
+          throw new Error("Username already exists");
+        }
+        db.users.push({ user_id: db.users.length + 1, username, password, role: "doctor" });
+        const specId = Number(speciality_id) || 3;
+        const spec = db.specialities.find((s) => s.speciality_id === specId);
+        const quals = qualification
+          ? String(qualification)
+              .split(",")
+              .map((q) => q.trim())
+              .filter(Boolean)
+          : [];
+        const nextId = (db.doctors.reduce((m, d) => Math.max(m, d.doctor_id), 0) || 0) + 1;
+        db.doctors.push({
+          doctor_id: nextId,
+          doctor_name: username,
+          contact_no: contact_no ? contact_no.trim() : "",
+          speciality_id: specId,
+          speciality_name: spec ? spec.speciality_name : "General Medicine",
+          qualifications: quals,
+        });
+        saveDatabase();
+        return { message: "Doctor account created", doctor_id: nextId };
+      }
+    );
+  },
 };
 
 // ── Application UI State ─────────────────────────────────────────────────────
@@ -655,6 +759,10 @@ const state = {
   draft: [], // { medicine_id, medicine_name, dosage, frequency, duration }
   conflicts: null,
   selectedPatientId: null,
+  // login(updated content)
+  currentUser: null,
+  activeDoctorId: null,
+  pendingDoctorId: null,
 };
 
 const titles = {
@@ -663,6 +771,8 @@ const titles = {
   patients: ["Patients", "Unified records shared across all specialties"],
   medicines: ["Medicines", "Single master list — one source of truth"],
   interactions: ["Conflicts", "Predefined drug–drug interaction rules"],
+  // login(updated content)
+  accounts: ["Create Accounts", "Owner creates doctor accounts"],
 };
 
 function toast(msg) {
@@ -675,25 +785,6 @@ function toast(msg) {
 
 function doctorId() {
   return Number(document.getElementById("session-doctor").value);
-}
-
-// ── Authentication Check ──────────────────────────────────────────────────────
-function checkAuth() {
-  const logged = localStorage.getItem("clinic_logged");
-  const role = localStorage.getItem("clinic_role");
-  const user = localStorage.getItem("clinic_user");
-  if (logged !== "true" || !role || !user) {
-    window.location.href = "login.html";
-    return null;
-  }
-  return { role, user: JSON.parse(user) };
-}
-
-function handleLogout() {
-  localStorage.removeItem("clinic_logged");
-  localStorage.removeItem("clinic_role");
-  localStorage.removeItem("clinic_user");
-  window.location.href = "login.html";
 }
 
 function showView(name) {
@@ -713,17 +804,8 @@ function showView(name) {
   if (name === "dashboard") loadStats();
 }
 
-// ── Boot ─────────────────────────────────────────────────────────────────────
-async function boot() {
-  const auth = checkAuth();
-  if (!auth) {
-    document.getElementById("toast").classList.add("hidden");
-    return;
-  }
-
-  state.doctors = await ClinicService.getDoctors();
-  state.patients = await ClinicService.getPatients();
-
+// login(updated content)
+function renderDoctorSelects() {
   const sel = document.getElementById("session-doctor");
   sel.innerHTML = state.doctors
     .map(
@@ -731,6 +813,35 @@ async function boot() {
         `<option value="${d.doctor_id}">${d.doctor_name} · ${d.speciality_name}</option>`
     )
     .join("");
+  if (state.activeDoctorId) sel.value = String(state.activeDoctorId);
+  else if (state.doctors.length) state.activeDoctorId = state.doctors[0].doctor_id;
+
+  const loginDocSel = document.getElementById("login-doctor-select");
+  if (loginDocSel) {
+    loginDocSel.innerHTML = state.doctors
+      .map(
+        (d) =>
+          `<option value="${d.doctor_name}">${d.doctor_name} · ${d.speciality_name}</option>`
+      )
+      .join("");
+  }
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+async function boot() {
+  state.doctors = await ClinicService.getDoctors();
+  state.patients = await ClinicService.getPatients();
+
+  const sel = document.getElementById("session-doctor");
+  // login(updated content)
+  renderDoctorSelects();
+  const specs = await ClinicService.getSpecialties();
+  const specSel = document.getElementById("new-doctor-speciality");
+  if (specSel) {
+    specSel.innerHTML =
+      `<option value="">Select specialty…</option>` +
+      specs.map((s) => `<option value="${s.speciality_id}">${s.speciality_name}</option>`).join("");
+  }
 
   const rxPatient = document.getElementById("rx-patient");
   rxPatient.innerHTML =
@@ -749,14 +860,17 @@ async function boot() {
     btn.addEventListener("click", () => showView(btn.dataset.goto));
   });
 
+  // login(updated content)
   sel.addEventListener("change", () => {
-    state.draft = [];
-    state.conflicts = null;
-    renderDraft();
-    hideConflicts();
-    if (document.getElementById("view-prescribe").classList.contains("active")) {
-      loadFormulary();
-    }
+    const targetId = Number(sel.value);
+    const targetDoc = state.doctors.find((d) => d.doctor_id === targetId);
+    sel.value = String(state.activeDoctorId);
+    if (!targetDoc) return;
+    state.pendingDoctorId = targetId;
+    document.getElementById("switch-doctor-info").textContent =
+      `Enter password for ${targetDoc.doctor_name}`;
+    document.getElementById("switch-doctor-pass").value = "";
+    document.getElementById("switch-doctor-window").classList.remove("hidden");
   });
 
   rxPatient.addEventListener("change", onPatientChange);
@@ -766,7 +880,6 @@ async function boot() {
     document.getElementById("patient-form").classList.toggle("hidden");
   });
   document.getElementById("patient-form").addEventListener("submit", registerPatient);
-  document.getElementById("btn-logout").addEventListener("click", handleLogout);
 
   loadStats();
 }
@@ -1165,8 +1278,150 @@ async function loadInteractions() {
     .join("");
 }
 
+// login(updated content)
+function initLoginSystem() {
+  const loginWin = document.getElementById("login-window");
+  const logoutWin = document.getElementById("logout-window");
+  const switchWin = document.getElementById("switch-doctor-window");
+  const appShell = document.getElementById("app-shell");
+  const navAccounts = document.getElementById("nav-accounts");
+  const roleSelect = document.getElementById("login-role");
+  const loginUser = document.getElementById("login-user");
+  const loginDocSelect = document.getElementById("login-doctor-select");
+  const signupBtn = document.getElementById("btn-owner-signup");
+
+  function syncLoginRoleUI() {
+    const isDoctor = roleSelect.value === "doctor";
+    loginUser.classList.toggle("hidden", isDoctor);
+    loginDocSelect.classList.toggle("hidden", !isDoctor);
+    signupBtn.classList.toggle("hidden", isDoctor);
+  }
+
+  roleSelect.addEventListener("change", syncLoginRoleUI);
+  syncLoginRoleUI();
+
+  signupBtn.addEventListener("click", async () => {
+    const user = loginUser.value.trim();
+    const pass = document.getElementById("login-pass").value;
+    if (!user || !pass) return toast("Enter username and password");
+    try {
+      await ClinicService.ownerSignup(user, pass);
+      roleSelect.value = "owner";
+      syncLoginRoleUI();
+      toast("Owner account created. You can login now.");
+    } catch (err) {
+      toast(err.message || "Owner signup failed");
+    }
+  });
+
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const role = roleSelect.value;
+    const user = role === "doctor" ? loginDocSelect.value : loginUser.value.trim();
+    const pass = document.getElementById("login-pass").value;
+    if (!user) return toast("Enter or select username");
+    try {
+      state.currentUser = await ClinicService.login(user, pass, role);
+      loginWin.classList.add("hidden");
+      appShell.classList.remove("hidden");
+      navAccounts.classList.toggle("hidden", role !== "owner");
+      if (role === "doctor") {
+        const doc = state.doctors.find((d) => d.doctor_name === user);
+        if (doc) {
+          state.activeDoctorId = doc.doctor_id;
+          document.getElementById("session-doctor").value = String(doc.doctor_id);
+        }
+      }
+      showView("dashboard");
+      toast(`Logged in as ${user} (${role})`);
+    } catch (err) {
+      toast("Invalid username, password, or role");
+    }
+  });
+
+  document.getElementById("create-account-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const username = document.getElementById("new-account-user").value.trim();
+    const contact_no = document.getElementById("new-doctor-contact").value.trim();
+    const speciality_id = Number(document.getElementById("new-doctor-speciality").value);
+    const qualification = document.getElementById("new-doctor-qualification").value.trim();
+    const password = document.getElementById("new-account-pass").value;
+    try {
+      await ClinicService.createAccount({
+        owner_role: state.currentUser?.role,
+        username,
+        password,
+        contact_no,
+        speciality_id,
+        qualification,
+      });
+      state.doctors = await ClinicService.getDoctors();
+      renderDoctorSelects();
+      loadStats();
+      e.target.reset();
+      toast("Doctor account created");
+    } catch (err) {
+      toast(err.message || "Failed to create doctor account");
+    }
+  });
+
+  document.getElementById("btn-cancel-switch").addEventListener("click", () => {
+    state.pendingDoctorId = null;
+    switchWin.classList.add("hidden");
+  });
+
+  document.getElementById("switch-doctor-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const targetDoc = state.doctors.find((d) => d.doctor_id === state.pendingDoctorId);
+    const pass = document.getElementById("switch-doctor-pass").value;
+    if (!targetDoc) return;
+    try {
+      await ClinicService.login(targetDoc.doctor_name, pass, "doctor");
+      state.activeDoctorId = targetDoc.doctor_id;
+      document.getElementById("session-doctor").value = String(targetDoc.doctor_id);
+      if (state.currentUser?.role === "doctor") {
+        state.currentUser.username = targetDoc.doctor_name;
+      }
+      state.draft = [];
+      state.conflicts = null;
+      renderDraft();
+      hideConflicts();
+      if (document.getElementById("view-prescribe").classList.contains("active")) {
+        loadFormulary();
+      }
+      switchWin.classList.add("hidden");
+      toast(`Switched to ${targetDoc.doctor_name}`);
+    } catch (err) {
+      toast(`Incorrect password for ${targetDoc.doctor_name}`);
+    }
+  });
+
+  document.getElementById("btn-open-logout").addEventListener("click", () => {
+    document.getElementById("logout-user-info").textContent = state.currentUser
+      ? `Logged in as ${state.currentUser.username} (${state.currentUser.role}). Confirm logout?`
+      : "Are you sure you want to logout?";
+    logoutWin.classList.remove("hidden");
+  });
+
+  document.getElementById("btn-cancel-logout").addEventListener("click", () => {
+    logoutWin.classList.add("hidden");
+  });
+
+  document.getElementById("btn-confirm-logout").addEventListener("click", () => {
+    state.currentUser = null;
+    document.getElementById("login-form").reset();
+    syncLoginRoleUI();
+    logoutWin.classList.add("hidden");
+    appShell.classList.add("hidden");
+    loginWin.classList.remove("hidden");
+    toast("Logged out");
+  });
+}
+
 // ── Start Application ────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
+  // login(updated content)
+  initLoginSystem();
   boot().catch((err) => {
     console.error(err);
     toast("Failed to initialize clinic data");

@@ -120,26 +120,6 @@ input {
   font-weight: 600;
 }
 
-.sidebar-footer {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--line);
-}
-
-.logout-btn {
-  width: 100%;
-  justify-content: flex-start;
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid transparent;
-}
-
-.logout-btn:hover {
-  background: rgba(180, 35, 24, 0.08);
-  border-color: rgba(180, 35, 24, 0.2);
-  color: var(--danger);
-}
-
 .sidebar-foot {
   margin-top: auto;
   font-size: 0.75rem;
@@ -829,4 +809,21 @@ th {
   .draft-item {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* login(updated content) */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 36, 40, 0.55);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+
+.auth-box {
+  width: 100%;
+  max-width: 360px;
+  background: var(--surface-solid);
 }

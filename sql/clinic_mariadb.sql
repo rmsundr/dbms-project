@@ -16,6 +16,8 @@ DROP TABLE IF EXISTS doctor_qualification;
 DROP TABLE IF EXISTS doctor;
 DROP TABLE IF EXISTS patient;
 DROP TABLE IF EXISTS speciality;
+-- login(updated content)
+DROP TABLE IF EXISTS users;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -42,20 +44,6 @@ CREATE TABLE doctor_qualification (
     PRIMARY KEY (doctor_id, qualification),
     CONSTRAINT fk_dq_doctor
         FOREIGN KEY (doctor_id) REFERENCES doctor(doctor_id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Clinic User Authentication & RBAC
-CREATE TABLE clinic_user (
-    user_id       INT AUTO_INCREMENT PRIMARY KEY,
-    username      VARCHAR(50) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name     VARCHAR(150) NOT NULL,
-    role          VARCHAR(20) NOT NULL, -- 'doctor', 'staff', 'admin'
-    speciality_id INT NULL,             -- linked specialty if role = 'doctor'
-    doctor_id     INT NULL,             -- linked doctor if role = 'doctor'
-    CONSTRAINT chk_user_role CHECK (role IN ('doctor', 'staff', 'admin')),
-    CONSTRAINT fk_user_speciality FOREIGN KEY (speciality_id) REFERENCES speciality(speciality_id) ON DELETE SET NULL,
-    CONSTRAINT fk_user_doctor FOREIGN KEY (doctor_id) REFERENCES doctor(doctor_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE patient (
@@ -158,6 +146,15 @@ CREATE INDEX idx_rx_patient ON prescription(patient_id);
 CREATE INDEX idx_rx_doctor ON prescription(doctor_id);
 CREATE INDEX idx_item_medicine ON prescription_item(medicine_id);
 CREATE INDEX idx_item_status ON prescription_item(status);
+
+-- login(updated content)
+CREATE TABLE users (
+    user_id    INT AUTO_INCREMENT PRIMARY KEY,
+    username   VARCHAR(100) NOT NULL UNIQUE,
+    password   VARCHAR(100) NOT NULL,
+    role       VARCHAR(20) NOT NULL,
+    CONSTRAINT chk_user_role CHECK (role IN ('owner', 'doctor'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── SEED DATA ────────────────────────────────────────────────────────────────
 
@@ -267,3 +264,11 @@ INSERT INTO prescription_item (prescription_no, item_no, medicine_id, dosage, fr
     (3, 2, 12, '500 mg', 'As needed',   '7 days',  'past'),     -- Paracetamol
     (4, 1, 14, '20 mg',  'Once daily',  '14 days', 'active'),   -- Omeprazole
     (5, 1, 12, '500 mg', 'SOS',         '3 days',  'active');   -- Paracetamolx
+
+-- login(updated content)
+INSERT INTO users (username, password, role) VALUES
+    ('Dr. Anitha Menon',   'Dr. Anitha Menon',   'doctor'),
+    ('Dr. Rajesh Kumar',   'Dr. Rajesh Kumar',   'doctor'),
+    ('Dr. Sreelatha Nair', 'Dr. Sreelatha Nair', 'doctor'),
+    ('Dr. Mohammed Ali',   'Dr. Mohammed Ali',   'doctor'),
+    ('Dr. Priya Varma',    'Dr. Priya Varma',    'doctor');
