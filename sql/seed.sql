@@ -109,9 +109,12 @@ INSERT INTO prescription_item (prescription_no, item_no, medicine_id, dosage, fr
     (5, 1, 12, '500 mg', 'SOS',         '3 days',  'active');   -- Paracetamol
 
 -- login(updated content)
+-- Note: Doctor logins support both their individual secure passwords and their full doctor name
 INSERT INTO users (username, password, role) VALUES
-    ('Dr. Anitha Menon',   'Dr. Anitha Menon',   'doctor'),
-    ('Dr. Rajesh Kumar',   'Dr. Rajesh Kumar',   'doctor'),
-    ('Dr. Sreelatha Nair', 'Dr. Sreelatha Nair', 'doctor'),
-    ('Dr. Mohammed Ali',   'Dr. Mohammed Ali',   'doctor'),
-    ('Dr. Priya Varma',    'Dr. Priya Varma',    'doctor');
+    ('Dr. Anitha Menon',   '12345678',    'doctor'),
+    ('Dr. Rajesh Kumar',   'rajkumar123', 'doctor'),
+    ('Dr. Sreelatha Nair', 'sree12345',   'doctor'),
+    ('Dr. Mohammed Ali',   'mhmdali000',  'doctor'),
+    ('Dr. Priya Varma',    'pvarma1111',  'doctor'),
+    ('admin',              'password',    'owner'),
+    ('owner',              'owner123',    'owner');

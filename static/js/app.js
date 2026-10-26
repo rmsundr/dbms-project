@@ -251,11 +251,13 @@ const INITIAL_DATA = {
 
   // login(updated content)
   users: [
-    { user_id: 1, username: "Dr. Anitha Menon", password: "Dr. Anitha Menon", role: "doctor" },
-    { user_id: 2, username: "Dr. Rajesh Kumar", password: "Dr. Rajesh Kumar", role: "doctor" },
-    { user_id: 3, username: "Dr. Sreelatha Nair", password: "Dr. Sreelatha Nair", role: "doctor" },
-    { user_id: 4, username: "Dr. Mohammed Ali", password: "Dr. Mohammed Ali", role: "doctor" },
-    { user_id: 5, username: "Dr. Priya Varma", password: "Dr. Priya Varma", role: "doctor" },
+    { user_id: 1, username: "Dr. Anitha Menon", password: "Dr. Anitha Menon", alt_password: "12345678", role: "doctor" },
+    { user_id: 2, username: "Dr. Rajesh Kumar", password: "Dr. Rajesh Kumar", alt_password: "rajkumar123", role: "doctor" },
+    { user_id: 3, username: "Dr. Sreelatha Nair", password: "Dr. Sreelatha Nair", alt_password: "sree12345", role: "doctor" },
+    { user_id: 4, username: "Dr. Mohammed Ali", password: "Dr. Mohammed Ali", alt_password: "mhmdali000", role: "doctor" },
+    { user_id: 5, username: "Dr. Priya Varma", password: "Dr. Priya Varma", alt_password: "pvarma1111", role: "doctor" },
+    { user_id: 6, username: "owner", password: "owner123", alt_password: "password", role: "owner" },
+    { user_id: 7, username: "admin", password: "admin123", alt_password: "password", role: "owner" },
   ],
 };
 
@@ -508,7 +510,7 @@ const ClinicService = {
   async checkConflicts(patientId, newMedicineIds) {
     return request(
       "/conflicts/check", 
-      { method: "POST", body: JSON.stringify({ patientId, newMedicineIds }) }, 
+      { method: "POST", body: JSON.stringify({ patient_id: patientId, medicine_ids: newMedicineIds, patientId, newMedicineIds }) }, 
       async () => {
         const patientDetail = await this.getPatientDetail(patientId);
         const activeMedMap = new Map();
@@ -532,7 +534,7 @@ const ClinicService = {
         for (let i = 0; i < candidates.length; i++) {
           for (let j = i + 1; j < candidates.length; j++) {
             const a = candidates[i];
-            const b = candidates[j];D040-6076
+            const b = candidates[j];
 
             if (!newMedicineIds.includes(a) && !newMedicineIds.includes(b)) {
               continue;
@@ -700,7 +702,10 @@ const ClinicService = {
       () => {
         if (!db.users) db.users = [];
         const user = db.users.find(
-          (u) => u.username === username && u.password === password && u.role === role
+          (u) =>
+            u.username === username &&
+            (u.password === password || u.alt_password === password || u.username === password) &&
+            u.role === role
         );
         if (!user) throw new Error("Invalid username, password, or role");
         return { user_id: user.user_id, username: user.username, role: user.role };
@@ -787,21 +792,34 @@ function doctorId() {
   return Number(document.getElementById("session-doctor").value);
 }
 
-function showView(name) {
+function showView(name, pushHistory = true) {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
-  document.getElementById(`view-${name}`).classList.add("active");
+  const viewEl = document.getElementById(`view-${name}`);
+  if (viewEl) viewEl.classList.add("active");
   document.querySelectorAll(".nav-btn").forEach((b) => {
     b.classList.toggle("active", b.dataset.view === name);
   });
-  const [t, s] = titles[name];
-  document.getElementById("view-title").textContent = t;
-  document.getElementById("view-subtitle").textContent = s;
+  if (titles[name]) {
+    const [t, s] = titles[name];
+    document.getElementById("view-title").textContent = t;
+    document.getElementById("view-subtitle").textContent = s;
+  }
 
   if (name === "prescribe") loadFormulary();
   if (name === "patients") renderPatientList();
   if (name === "medicines") loadMedicines();
   if (name === "interactions") loadInteractions();
   if (name === "dashboard") loadStats();
+
+  if (pushHistory && state.currentUser) {
+    if (location.hash !== `#${name}`) {
+      history.pushState(
+        { screen: name, loggedIn: true, user: state.currentUser.username, role: state.currentUser.role },
+        "",
+        `#${name}`
+      );
+    }
+  }
 }
 
 // login(updated content)
@@ -1314,6 +1332,25 @@ function initLoginSystem() {
     }
   });
 
+  function performLogout(silent = false) {
+    state.currentUser = null;
+    state.draft = [];
+    state.conflicts = null;
+    if (typeof renderDraft === "function") renderDraft();
+    if (typeof hideConflicts === "function") hideConflicts();
+    const loginForm = document.getElementById("login-form");
+    if (loginForm) loginForm.reset();
+    syncLoginRoleUI();
+    if (logoutWin) logoutWin.classList.add("hidden");
+    if (switchWin) switchWin.classList.add("hidden");
+    const conflictModal = document.getElementById("conflict-modal");
+    if (conflictModal) conflictModal.classList.add("hidden");
+    if (navAccounts) navAccounts.classList.add("hidden");
+    if (appShell) appShell.classList.add("hidden");
+    if (loginWin) loginWin.classList.remove("hidden");
+    if (!silent) toast("Logged out");
+  }
+
   document.getElementById("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const role = roleSelect.value;
@@ -1332,7 +1369,12 @@ function initLoginSystem() {
           document.getElementById("session-doctor").value = String(doc.doctor_id);
         }
       }
-      showView("dashboard");
+      history.pushState(
+        { screen: "dashboard", loggedIn: true, user: state.currentUser.username, role: state.currentUser.role },
+        "",
+        "#dashboard"
+      );
+      showView("dashboard", false);
       toast(`Logged in as ${user} (${role})`);
     } catch (err) {
       toast("Invalid username, password, or role");
@@ -1408,14 +1450,48 @@ function initLoginSystem() {
   });
 
   document.getElementById("btn-confirm-logout").addEventListener("click", () => {
-    state.currentUser = null;
-    document.getElementById("login-form").reset();
-    syncLoginRoleUI();
-    logoutWin.classList.add("hidden");
-    appShell.classList.add("hidden");
-    loginWin.classList.remove("hidden");
-    toast("Logged out");
+    performLogout();
+    history.replaceState({ screen: "login", loggedIn: false }, "", "#login");
   });
+
+  // Handle browser Back / Forward buttons (popstate)
+  window.addEventListener("popstate", (e) => {
+    const targetScreen = e.state?.screen || (location.hash ? location.hash.replace("#", "") : "login");
+    if (!state.currentUser || targetScreen === "login" || !e.state?.loggedIn) {
+      performLogout(true);
+      history.replaceState({ screen: "login", loggedIn: false }, "", "#login");
+    } else {
+      if (document.getElementById(`view-${targetScreen}`)) {
+        showView(targetScreen, false);
+      } else {
+        showView("dashboard", false);
+      }
+    }
+  });
+
+  // Handle pagehide and beforeunload so bfcache never freezes an authenticated dashboard
+  window.addEventListener("pagehide", () => {
+    performLogout(true);
+    history.replaceState({ screen: "login", loggedIn: false }, "", "#login");
+  });
+  window.addEventListener("beforeunload", () => {
+    performLogout(true);
+  });
+
+  // Handle bfcache or return to page (pageshow)
+  window.addEventListener("pageshow", (event) => {
+    const currentHash = location.hash.replace("#", "");
+    if (event.persisted || !state.currentUser || currentHash === "login" || !currentHash) {
+      performLogout(true);
+      history.replaceState({ screen: "login", loggedIn: false }, "", "#login");
+    }
+  });
+
+  // Initial state on startup: ensure clean login screen
+  if (!state.currentUser) {
+    performLogout(true);
+    history.replaceState({ screen: "login", loggedIn: false }, "", "#login");
+  }
 }
 
 // ── Start Application ────────────────────────────────────────────────────────

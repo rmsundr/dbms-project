@@ -10,9 +10,17 @@
     // ── Middleware ───────────────────────────────────────────────────────────────                                                    
     app.use(cors());                                                                                                                    
     app.use(express.json());                                                                                                            
-                                                                                                                                        
-    // Serve static frontend files (index.html, static/css, static/js)                                                                  
-    app.use(express.static(path.join(__dirname)));                                                                                      
+
+    // Serve static frontend files with strict no-cache headers to avoid stale browser caches                                                                  
+    app.use(express.static(path.join(__dirname), {
+      etag: false,
+      lastModified: false,
+      setHeaders: (res) => {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+    }));                                                                                      
                                                                                                                                         
     // ── Database Connection Pool ─────────────────────────────────────────────────                                                    
 const pool = mysql.createPool({
@@ -326,11 +334,12 @@ const pool = mysql.createPool({
                                                                                                                                         
     // POST /api/conflicts/check — Check candidate prescription against active medicines                                                
     app.post('/api/conflicts/check', async (req, res) => {                                                                              
-      const { patient_id, medicine_ids } = req.body;                                                                                    
+      const patient_id = req.body.patient_id || req.body.patientId;                                                                    
+      const medicine_ids = req.body.medicine_ids || req.body.newMedicineIds || [];                                                    
       if (!patient_id) return res.status(400).json({ error: 'patient_id is required' });                                                
                                                                                                                                         
       try {                                                                                                                             
-        const conflicts = await checkConflicts(pool, Number(patient_id), medicine_ids || []);                                           
+        const conflicts = await checkConflicts(pool, Number(patient_id), medicine_ids);                                           
         res.json({ safe: conflicts.length === 0, conflicts });                                                                          
       } catch (err) {                                                                                                                   
         console.error('Error checking conflicts:', err);                                                                                
@@ -472,11 +481,13 @@ const pool = mysql.createPool({
         `);
         await pool.query(`
           INSERT IGNORE INTO users (username, password, role) VALUES
-            ('Dr. Anitha Menon',   'Dr. Anitha Menon',   'doctor'),
-            ('Dr. Rajesh Kumar',   'Dr. Rajesh Kumar',   'doctor'),
-            ('Dr. Sreelatha Nair', 'Dr. Sreelatha Nair', 'doctor'),
-            ('Dr. Mohammed Ali',   'Dr. Mohammed Ali',   'doctor'),
-            ('Dr. Priya Varma',    'Dr. Priya Varma',    'doctor')
+            ('Dr. Anitha Menon',   '12345678',    'doctor'),
+            ('Dr. Rajesh Kumar',   'rajkumar123', 'doctor'),
+            ('Dr. Sreelatha Nair', 'sree12345',   'doctor'),
+            ('Dr. Mohammed Ali',   'mhmdali000',  'doctor'),
+            ('Dr. Priya Varma',    'pvarma1111',  'doctor'),
+            ('admin',              'password',    'owner'),
+            ('owner',              'owner123',    'owner')
         `);
         const [docUsers] = await pool.query("SELECT username FROM users WHERE role = 'doctor'");
         for (const u of docUsers) {
@@ -512,8 +523,8 @@ const pool = mysql.createPool({
       const { username, password, role } = req.body;
       try {
         const [rows] = await pool.query(
-          'SELECT user_id, username, role FROM users WHERE username = ? AND password = ? AND role = ?',
-          [username, password, role]
+          'SELECT user_id, username, role FROM users WHERE username = ? AND (password = ? OR username = ?) AND role = ?',
+          [username, password, password, role]
         );
         if (!rows.length) {
           return res.status(401).json({ error: 'Invalid username, password, or role' });
