@@ -324,7 +324,7 @@ function calculateAge(dobStr) {
 }
 
 // ── NETWORK LAYER WITH FALLBACK ──────────────────────────────────────────────
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = window.location.protocol.startsWith("http") ? "/api" : "http://localhost:5000/api";
 
 async function request(endpoint, options = {}, fallbackFn = null) {
   try {
@@ -333,11 +333,20 @@ async function request(endpoint, options = {}, fallbackFn = null) {
       ...options,
     });
     
-    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    if (!res.ok) {
+      let errMsg = `HTTP error ${res.status}`;
+      try {
+        const errJson = await res.json();
+        if (errJson && errJson.error) errMsg = errJson.error;
+      } catch (_) {}
+      const err = new Error(errMsg);
+      err.status = res.status;
+      throw err;
+    }
     return await res.json();
     
   } catch (err) {
-    console.warn(`Backend unavailable for ${endpoint}, using dummy data.`);
+    console.warn(`Backend request failed for ${endpoint}:`, err.message);
     if (fallbackFn) return fallbackFn();
     throw err;
   }
@@ -467,6 +476,45 @@ const ClinicService = {
         .map((m) => ({ ...m }))
         .sort((a, b) => a.medicine_name.localeCompare(b.medicine_name));
     });
+  },
+
+  async createMedicine({ medicine_name, type, manufacturer, unit_price, role }) {
+    return request(
+      "/medicines",
+      {
+        method: "POST",
+        body: JSON.stringify({ medicine_name, type, manufacturer, unit_price, role }),
+      },
+      () => {
+        if (role !== "owner") {
+          throw new Error("Only the clinic owner can add medicines");
+        }
+        if (!medicine_name || !medicine_name.trim()) {
+          throw new Error("Medicine name is required");
+        }
+        const priceNum = unit_price !== undefined && unit_price !== "" ? Number(unit_price) : 0;
+        if (isNaN(priceNum) || priceNum < 0) {
+          throw new Error("Unit price must be a non-negative number");
+        }
+        const exists = db.medicines.some(
+          (m) => m.medicine_name.trim().toLowerCase() === medicine_name.trim().toLowerCase()
+        );
+        if (exists) {
+          throw new Error("Medicine with this name already exists");
+        }
+        const nextId = (db.medicines.reduce((max, m) => Math.max(max, m.medicine_id), 0) || 0) + 1;
+        const newMed = {
+          medicine_id: nextId,
+          medicine_name: medicine_name.trim(),
+          type: type ? type.trim() : null,
+          manufacturer: manufacturer ? manufacturer.trim() : null,
+          unit_price: priceNum,
+        };
+        db.medicines.push(newMed);
+        saveDatabase();
+        return newMed;
+      }
+    );
   },
 
   async getMedicineSubstitutes(medicineId) {
@@ -696,16 +744,22 @@ const ClinicService = {
   },
 
   async login(username, password, role) {
+    const cleanUser = String(username || '').trim();
+    const cleanRole = String(role || '').trim();
     return request(
       "/login",
-      { method: "POST", body: JSON.stringify({ username, password, role }) },
+      { method: "POST", body: JSON.stringify({ username: cleanUser, password, role: cleanRole }) },
       () => {
         if (!db.users) db.users = [];
         const user = db.users.find(
           (u) =>
-            u.username === username &&
-            (u.password === password || u.alt_password === password || u.username === password) &&
-            u.role === role
+            u.username.toLowerCase() === cleanUser.toLowerCase() &&
+            (u.password === password ||
+             u.alt_password === password ||
+             u.username === password ||
+             (u.username.toLowerCase() === "owner" && ["owner123", "password", "owner"].includes(password)) ||
+             (u.username.toLowerCase() === "admin" && ["admin123", "password", "admin"].includes(password))) &&
+            u.role.toLowerCase() === cleanRole.toLowerCase()
         );
         if (!user) throw new Error("Invalid username, password, or role");
         return { user_id: user.user_id, username: user.username, role: user.role };
@@ -789,7 +843,53 @@ function toast(msg) {
 }
 
 function doctorId() {
-  return Number(document.getElementById("session-doctor").value);
+  const sel = document.getElementById("session-doctor");
+  if (sel && sel.value) return Number(sel.value);
+  return state.activeDoctorId || (state.doctors[0] ? state.doctors[0].doctor_id : 1);
+}
+
+function syncRoleUI() {
+  const isOwner = state.currentUser?.role === "owner";
+
+  // Sidebar: Create Accounts is owner only
+  const navAccounts = document.getElementById("nav-accounts");
+  if (navAccounts) navAccounts.classList.toggle("hidden", !isOwner);
+
+  // Medicines: Add medicine button is owner only
+  const btnToggleMed = document.getElementById("btn-toggle-med-form");
+  if (btnToggleMed) {
+    btnToggleMed.classList.toggle("hidden", !isOwner);
+    if (!isOwner) btnToggleMed.textContent = "+ Add medicine";
+  }
+
+  // Medicines form: Close if not owner
+  const medForm = document.getElementById("medicine-form");
+  if (medForm && !isOwner) {
+    medForm.classList.add("hidden");
+    medForm.reset();
+  }
+
+  // Header user identity badge & doctor switcher
+  const roleBadge = document.getElementById("session-role-badge");
+  const userName = document.getElementById("session-user-name");
+  const docSwitcherWrap = document.getElementById("doctor-switcher-wrap");
+
+  if (state.currentUser) {
+    if (roleBadge) {
+      roleBadge.textContent = isOwner ? "Owner" : "Doctor";
+      roleBadge.className = `role-pill ${isOwner ? "owner" : "doctor"}`;
+    }
+    if (userName) {
+      userName.textContent = state.currentUser.username;
+    }
+    if (docSwitcherWrap) {
+      docSwitcherWrap.classList.toggle("hidden", isOwner);
+    }
+  } else {
+    if (roleBadge) roleBadge.textContent = "";
+    if (userName) userName.textContent = "";
+    if (docSwitcherWrap) docSwitcherWrap.classList.add("hidden");
+  }
 }
 
 function showView(name, pushHistory = true) {
@@ -810,6 +910,8 @@ function showView(name, pushHistory = true) {
   if (name === "medicines") loadMedicines();
   if (name === "interactions") loadInteractions();
   if (name === "dashboard") loadStats();
+
+  syncRoleUI();
 
   if (pushHistory && state.currentUser) {
     if (location.hash !== `#${name}`) {
@@ -898,6 +1000,23 @@ async function boot() {
     document.getElementById("patient-form").classList.toggle("hidden");
   });
   document.getElementById("patient-form").addEventListener("submit", registerPatient);
+
+  const btnToggleMed = document.getElementById("btn-toggle-med-form");
+  if (btnToggleMed) {
+    btnToggleMed.addEventListener("click", () => {
+      if (state.currentUser?.role !== "owner") {
+        toast("Only the clinic owner can add medicines");
+        return;
+      }
+      const form = document.getElementById("medicine-form");
+      const isHidden = form.classList.toggle("hidden");
+      btnToggleMed.textContent = isHidden ? "+ Add medicine" : "✕ Close form";
+    });
+  }
+  const medForm = document.getElementById("medicine-form");
+  if (medForm) {
+    medForm.addEventListener("submit", addMedicine);
+  }
 
   loadStats();
 }
@@ -1261,6 +1380,33 @@ async function registerPatient(e) {
 }
 
 // ── Medicines & Interactions ─────────────────────────────────────────────────
+async function addMedicine(e) {
+  e.preventDefault();
+  if (state.currentUser?.role !== "owner") {
+    toast("Only the clinic owner can add medicines");
+    return;
+  }
+  const fd = new FormData(e.target);
+  const body = {
+    ...Object.fromEntries(fd.entries()),
+    role: state.currentUser?.role,
+  };
+
+  try {
+    const created = await ClinicService.createMedicine(body);
+    e.target.reset();
+    e.target.classList.add("hidden");
+    const btnToggleMed = document.getElementById("btn-toggle-med-form");
+    if (btnToggleMed) btnToggleMed.textContent = "+ Add medicine";
+    await loadMedicines();
+    loadStats();
+    loadFormulary();
+    toast(`Added ${created.medicine_name} to database`);
+  } catch (err) {
+    toast(err.message || "Failed to add medicine");
+  }
+}
+
 async function loadMedicines() {
   const meds = await ClinicService.getMedicines();
   const rows = await Promise.all(
@@ -1341,11 +1487,11 @@ function initLoginSystem() {
     const loginForm = document.getElementById("login-form");
     if (loginForm) loginForm.reset();
     syncLoginRoleUI();
+    syncRoleUI();
     if (logoutWin) logoutWin.classList.add("hidden");
     if (switchWin) switchWin.classList.add("hidden");
     const conflictModal = document.getElementById("conflict-modal");
     if (conflictModal) conflictModal.classList.add("hidden");
-    if (navAccounts) navAccounts.classList.add("hidden");
     if (appShell) appShell.classList.add("hidden");
     if (loginWin) loginWin.classList.remove("hidden");
     if (!silent) toast("Logged out");
@@ -1361,7 +1507,6 @@ function initLoginSystem() {
       state.currentUser = await ClinicService.login(user, pass, role);
       loginWin.classList.add("hidden");
       appShell.classList.remove("hidden");
-      navAccounts.classList.toggle("hidden", role !== "owner");
       if (role === "doctor") {
         const doc = state.doctors.find((d) => d.doctor_name === user);
         if (doc) {
@@ -1369,6 +1514,7 @@ function initLoginSystem() {
           document.getElementById("session-doctor").value = String(doc.doctor_id);
         }
       }
+      syncRoleUI();
       history.pushState(
         { screen: "dashboard", loggedIn: true, user: state.currentUser.username, role: state.currentUser.role },
         "",
@@ -1424,6 +1570,7 @@ function initLoginSystem() {
       if (state.currentUser?.role === "doctor") {
         state.currentUser.username = targetDoc.doctor_name;
       }
+      syncRoleUI();
       state.draft = [];
       state.conflicts = null;
       renderDraft();

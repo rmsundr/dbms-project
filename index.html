@@ -19,11 +19,15 @@
           <option value="owner">Owner</option>
           <option value="doctor">Doctor</option>
         </select>
-        <input id="login-user" placeholder="Owner Username" />
+        <input id="login-user" placeholder="Username (owner or admin)" />
         <select id="login-doctor-select" class="hidden"></select>
-        <input id="login-pass" type="password" placeholder="Password" required />
+        <input id="login-pass" type="password" placeholder="Password (owner123 or admin123)" required />
         <button class="btn primary" type="submit">Login</button>
         <button class="btn ghost" type="button" id="btn-owner-signup">Create Owner Account</button>
+        <p class="muted" style="margin:0.4rem 0 0;font-size:0.75rem;text-align:center;line-height:1.4">
+          Demo Owner: <strong>owner</strong> / <strong>owner123</strong> (or <strong>admin</strong> / <strong>admin123</strong>)<br/>
+          Doctor: switch role to Doctor above
+        </p>
       </form>
     </div>
   </div>
@@ -56,9 +60,17 @@
           <h1 id="view-title">Dashboard</h1>
           <p id="view-subtitle" class="subtitle">Clinic overview and safety signals</p>
         </div>
-        <div class="doctor-picker">
-          <label for="session-doctor">Signed in as</label>
-          <select id="session-doctor"></select>
+        <div class="user-session-bar" id="user-session-bar">
+          <div class="session-user-badge">
+            <span class="session-label">Signed in as</span>
+            <div class="session-identity">
+              <span class="role-pill doctor" id="session-role-badge">Doctor</span>
+              <strong id="session-user-name">Dr. Anitha Menon</strong>
+            </div>
+          </div>
+          <div class="doctor-switcher-wrap" id="doctor-switcher-wrap">
+            <select id="session-doctor" title="Active doctor"></select>
+          </div>
           <!-- login(updated content) -->
           <button class="btn ghost small" type="button" id="btn-open-logout">Logout</button>
         </div>
@@ -152,9 +164,19 @@
       <section id="view-medicines" class="view">
         <div class="panel">
           <div class="panel-head">
-            <h3>Master medicine list</h3>
-            <p class="muted">Single source of truth — referenced, never duplicated</p>
+            <div>
+              <h3>Master medicine list</h3>
+              <p class="muted">Single source of truth — referenced, never duplicated</p>
+            </div>
+            <button class="btn small primary hidden" id="btn-toggle-med-form">+ Add medicine</button>
           </div>
+          <form id="medicine-form" class="medicine-form hidden">
+            <input name="medicine_name" placeholder="Medicine name (e.g. Paracetamol 500mg)" required />
+            <input name="type" placeholder="Type / Category (e.g. Analgesic)" />
+            <input name="manufacturer" placeholder="Manufacturer (e.g. Cipla)" />
+            <input name="unit_price" type="number" step="0.01" min="0" placeholder="Unit price (₹)" required />
+            <button class="btn primary small" type="submit">Save medicine</button>
+          </form>
           <div class="table-wrap">
             <table>
               <thead>
@@ -230,6 +252,6 @@
   </div>
 
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="static/js/app.js?v=20261026"></script>
+  <script src="static/js/app.js?v=20261027_2"></script>
 </body>
 </html>

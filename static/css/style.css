@@ -153,6 +153,65 @@ input {
   font-size: 0.95rem;
 }
 
+.user-session-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.75);
+  padding: 0.45rem 0.85rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 14px rgba(11, 110, 106, 0.05);
+}
+
+.session-user-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.session-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.session-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.role-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.role-pill.owner {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid rgba(180, 83, 9, 0.3);
+}
+
+.role-pill.doctor {
+  background: rgba(11, 110, 106, 0.12);
+  color: var(--brand);
+  border: 1px solid rgba(11, 110, 106, 0.25);
+}
+
+.doctor-switcher-wrap select {
+  padding: 0.45rem 0.65rem;
+  font-size: 0.82rem;
+  min-width: 180px;
+}
+
 .doctor-picker {
   display: flex;
   flex-direction: column;
@@ -611,6 +670,34 @@ input {
   margin-bottom: 0.9rem;
 }
 
+.medicine-form {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1.5fr 1fr auto;
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.85rem;
+  margin-bottom: 1rem;
+  background: rgba(11, 110, 106, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.medicine-form input {
+  font-size: 0.88rem;
+  padding: 0.55rem 0.7rem;
+}
+
+.medicine-form button {
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .medicine-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.medicine-form.hidden,
 .patient-form.hidden,
 .hidden {
   display: none !important;
